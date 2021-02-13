@@ -1,506 +1,431 @@
-﻿
---[[	@Xer0X CopyLeft 2020
-	Православие или Смерть! Group
+--[[		(c) Xer0X
+	"Православие или Смерть!" group
 
-	This script is modification,
-	and, hopefuly, iprovement,
-	of this great script:
-	https://github.com/ignacio/StackTracePlus
-	also see here:
-	https://forum.farmanager.com/viewtopic.php?f=15&t=9611&p=130485&hilit=stacktrace#p130485
-
-	DEPENDENCIES:
-
-	Lua Explorer Advanced
-	http://forum.farmanager.com/viewtopic.php?f=60&t=7988
+	Tools for "introspection",
+	aka live code analysis.
 ]]
 
---[[ Установка:
-StackTracePlusPlus-@Xer0X.lua положить в ./modules,
-и в _macroinit.lua добавить строки:
-
-	local STP = (require "StackTracePlusPlus@Xer0X")
-	debug.traceback = function(...) return string.gsub(stp.stacktrace(...), "\r\n", "\n") end
---]]
-
-local _G = _G, sz_mdl_own_file
-local string, io, debug, coroutine = string, io, debug, coroutine
-
-local	tostring, print, require, next, assert, pcall, type, pairs, ipairs, error =
-	tostring, print, require, next, assert, pcall, type, pairs, ipairs, error
-
-assert(debug, "debug table must be available at this point")
-
-local print = function() end
-local io_open = io.open
-local string_gmatch = string.gmatch
-local string_sub = string.sub
-local table_concat = table.concat
-
--- controls the maximum length of the 'stringified' table before cutting with ' (more...)'
-local _M = {
-	max_tbl_output_len = 100,
-	max_str_output_len = 100
-}
-
--- this tables should be weak so the elements in them won't become uncollectable
-local m_syst_known_tables = { [_G] = "_G (global table)" }
-
-local function add_known_module(name, desc)
-	local ok, mod = pcall(require, name)
-	if ok then m_syst_known_tables[mod] = desc end
+if not	Xer0X
+then	Xer0X = { }
 end
 
-add_known_module("string",	"string module")
-add_known_module("io",		"io module")
-add_known_module("os",		"os module")
-add_known_module("table",	"table module")
-add_known_module("math",	"math module")
-add_known_module("package",	"package module")
-add_known_module("debug",	"debug module")
-add_known_module("coroutine",	"coroutine module")
-
--- lua5.2
-add_known_module("bit32", "bit32 module")
--- luajit
-add_known_module("bit", "bit module")
-add_known_module("jit", "jit module")
--- lua5.3
-if _VERSION >= "Lua 5.3" then
-	add_known_module("utf8", "utf8 module")
-end
-
--- by @XeRoX:
-add_known_module("bit64",	"bit64 module")
-add_known_module("utf8",	"utf8 module")
-add_known_module("win",		"win module")
-
-local NORMALIZE_PATH = false
-
-local fnc_source_info_get	= Xer0X.fnc_source_info_get
-local fnc_file_whoami		= Xer0X.fnc_file_whoami
-local fnc_norm_script_path	= Xer0X.fnc_norm_script_path
-
-
-if not Xer0X then Xer0X = {} end
-
-
-local mdl_intro = require("introspection-@Xer0X")
-
-local m_user_known_tables = {}
-local m_syst_known_functions = {}
-local m_user_known_functions = {}
-
--- Adds a table to the list of known tables
-function _M.add_known_table(tab, description)
-	if m_syst_known_tables[tab] then
-		error("Cannot override an already known table")
-	end
-	m_user_known_tables[tab] = description
-end
-
--- Adds a function to the list of known functions
-function _M.add_known_function(fun, description)
-	if	m_syst_known_functions[fun]
-	then	error("Cannot override an already known function")
-	end
-	m_user_known_functions[fun] = description
-end
-
-for _, name in ipairs {
-	"assert", "collectgarbage",	"dofile",	"error",	"getmetatable", "ipairs", "load",	"loadfile",
-	"next",		"pairs",	"pcall",	"print",	"rawequal",	"rawget", "rawlen",	"rawset",
-	"require",	"select",	"setmetatable", "tonumber",	"tostring",	"type"	, "xpcall",
-	"gcinfo",	"getfenv",		"loadstring",	"module",	"newproxy",	"setfenv",	"unpack",
-		}
-do
-	if _G[name] then m_syst_known_functions[_G[name]] = name end
-end
-
-local function safe_tostring(value)
-	local ok, err = pcall(tostring, value)
-	if ok then return err else return ("<failed to get printable value>:'%s'"):format(err) end
-end
-
-local function ParseLine(line)
+Xer0X.fnc_definition_parse = function(line)
 	assert(type(line) == "string")
 	local match
 	match = line:match("^%s*function%s+(%w+)")
-	if match then
-		return match
-	end
+	if match then return match end
 	match = line:match("^%s*local%s+function%s+(%w+)")
-	if match then
-		return match
-	end
+	if match then return match end
 	match = line:match("^%s*local%s+(%w+)%s+=%s+function")
-	if match then
-		return match
-	end
+	if match then return match end
 	match = line:match("%s*function%s*%(")
-	if match then
-		return "(anonymous)"
-	end
+	if match then return "(anonymous)" end
 	return "(anonymous)"
 end
 
-local function fnc_guess_more_func_info(info)
-	local file, err, line_now, line_def
-	if	type(info.source) == "string" and
-		info.source:sub(1, 1) == "@"
+Xer0X.fnc_func_name_guess = function(dbg_info)
+	local	line_str, line_def, line_cur, src_code
+	local	src_code = ""
+	if	type(dbg_info.source) == "string" and dbg_info.source:sub(1, 1) == "@"
 	then
-		file, err = io.open(info.source:sub(2), "r")
-		if	file
-		then 	if	true
-			then	for	ii = 1, info.linedefined
-				do	line_def = file:read("*l")
-				end
-			end
-			if	info.currentline and
-				info.currentline >=
-				info.linedefined
-			then	for	ii = info.linedefined + 1, info.currentline
-				do	line_now = file:read("*l")
-				end
-			end
-			file:close()
-		else	print("file not found:"..tostring(err))
+		local	fileH, err = io.open(dbg_info.source:sub(2), "r")
+		if not	fileH
+		then	return "?"
 		end
+		for	line_num = 1, dbg_info.lastlinedefined
+		do 	line_str = fileH:read("*l")
+			if not	line_str then break end
+			if	line_num == dbg_info.linedefined
+			then	line_def = line_str
+			end
+			if	line_num == dbg_info.currentline
+			then	line_cur = line_str
+			end
+			if	line_num >= dbg_info.linedefined and
+				line_num <= dbg_info.lastlinedefined
+			then	src_code = src_code..line_str..string.char(10)..string.char(13)
+			end
+		end
+		fileH:close()
 	else
 		local	line_num = 0
-		for	ii_line in string.gmatch(info.source, "([^\n]+)\n-")
+		for	line_str in string.gmatch(dbg_info.source, "([^\n]+)\n-")
 		do	line_num = line_num + 1
-			if	line_num ==	info.linedefined
-			then	line_def =	ii_line
-			elseif	line_num ==	info.currentline
-			then	line_now =	ii_line
+			if	line_num == dbg_info.linedefined
+			then	line_def = line_str
+			end
+			if	line_num == dbg_info.currentline
+			then	line_cur = line_str
+			end
+			if	line_num >= dbg_info.linedefined and
+				line_num <= dbg_info.lastlinedefined
+			then	src_code = src_code..line_str..string.char(10)..string.char(13)
 			end
 		end
 	end
-	if	not file
-	then	print("file not found:"..tostring(err))
-	elseif	not line_def
-	then	print("line not found")
+	if src_code == "" then src_code = nil end
+	return line_def and Xer0X.fnc_definition_parse(line_def) or "?", src_code, line_cur
+end
+
+Xer0X.fnc_source_info_get = function(src_thr, src_lev, show_info, mode_locals, mode_upvals, with_nums, tbl_locals, tbl_upvals, tbl_meta, tbl_lcvrid)
+	if	type(src_thr) ~= "thread" and
+		type(src_thr) ~= "nil"
+	then	src_thr, src_lev, show_info, mode_locals, mode_upvals, tbl_locals, tbl_upvals, tbl_meta, tbl_lcvrid = nil,
+		src_thr, src_lev, show_info, mode_locals, mode_upvals, tbl_locals, tbl_upvals, tbl_meta, tbl_lcvrid
 	end
-	return line_def and ParseLine(line_def) or "?", line_now
-end
-
--- Dumper instances are used to analyze stacks and collect its information.
-local Dumper = {}
-
-Dumper.new = function(thread)
-	local t = { lines = {} }
-	for k, v in pairs(Dumper) do t[k] = v end
-	t.dumping_same_thread = thread == coroutine.running()
---[[	if a thread was supplied, bind it to debug.info and debug.get
-	we also need to skip this additional level we are introducing in the callstack (only if we are running
-	in the same thread we're inspecting) ]]
-	if type(thread) == "thread"
-	then
-		t.getinfo = function(level, what)
-			if t.dumping_same_thread and type(level) == "number"
-			then level = level + 1
-			end
-			return debug.getinfo(thread, level, what)
-		end
-		t.getlocal = function(level, loc)
-			if t.dumping_same_thread
-			then level = level + 1
-			end
-			return debug.getlocal(thread, level, loc)
-		end
-	else
-		t.getinfo  = debug.getinfo
-		t.getlocal = debug.getlocal
+	local dbg_info, LoadedMacros, mcr_src, mcr_inf
+	if not tbl_upvals then tbl_upvals = {} end
+	if not tbl_locals then tbl_locals = {} end
+	if not tbl_locals._VAR_MAP then tbl_locals._VAR_MAP = { i2n = { }, n2i = { }, raw = { } } end
+	local dbg_props = nil
+	local is_same_thr = not src_thr or coroutine.running() == src_thr
+	if	is_same_thr
+	then	dbg_info = debug.getinfo(src_lev, dbg_props)
+	else	dbg_info = debug.getinfo(src_thr, src_lev, dbg_props)
 	end
-	return t
-end
-
--- helpers for collecting strings to be used when assembling the final trace
-function Dumper:add(text)
-	self.lines[#self.lines + 1] = text
-end
-
-function Dumper:add_f(fmt, ...)
-	local text = string.format(fmt, ...)
-	self:add(text)
-end
-
-function Dumper:concat_lines() return table_concat(self.lines) end
-
---[[ Private:
-Iterates over the local variables of a given function.
-@param level The stack level where the function is.]]
-function Dumper:DumpLocals(level, level_to_show, tbl_locals, header_kind)
-	if type(tbl_locals) ~= "table" then
-		header_kind = tbl_locals
-		tbl_locals = {}
-	end
-	local test_info = self.getinfo(level, "nS")
-	if  not test_info then return end
-	if self.dumping_same_thread then level = level + 1 end
-	prefix = header_kind and string.format("%s|", level_to_show) or "\t"
-	local i = 0
-	while	true
-	do	i = i + 1
-		local name, value = self.getlocal(level, i)
-		if not name then break end
-		tbl_locals[name] = value or "<NIL>"
-		if	type(value) == "number"
-		then	self:add_f("%s%s = NUM:%g\n", prefix, name, value)
-		elseif	type(value) == "boolean"
-		then	self:add_f("%s%s = BIN:%s\n", prefix, name, tostring(value))
-		elseif	type(value) == "string"
-		then	value = #value < _M.max_tbl_output_len and value or
-				string.sub(value, 1, _M.max_tbl_output_len - 5).."..."
-			value = string.gsub(value, "\r\n", "\n")
-			value = string.gsub(value, "\n", "/N")
-			self:add_f("%s%s = STR:%q\n", prefix, name, value)
-		elseif	type(value) == "userdata"
-		then	self:add_f("%s%s = %s\n", prefix, name, safe_tostring(value))
-		elseif	type(value) == "nil"
-		then	self:add_f("%s%s = nil\n", prefix, name)
-		elseif	type(value) == "table"
-		then	if	m_syst_known_tables[value]
-			then	self:add_f("%s%s = %s\n", prefix, name, m_syst_known_tables[value])
-			elseif	m_user_known_tables[value]
-			then	self:add_f("%s%s = %s\n", prefix, name, m_user_known_tables[value])
-			else	local txt = "{"
-				local elem
-				for k, v in pairs(value)
-				do	v = safe_tostring(v)
-					v = string.gsub(v, "^function: ",  "FNC:")
-					v = string.gsub(v, "^table: ", "TBL:")
-					if	#txt + #v > _M.max_tbl_output_len
-					then	txt = txt.." (more..)"
-						break
-					else	txt = txt..safe_tostring(k)..":"..v
-					end
-					if next(value, k) then txt = txt.."," end
+	if	dbg_info
+	then	local fnc_name, fnc_code, curr_line = Xer0X.fnc_func_name_guess(dbg_info)
+		if not	dbg_info.name
+		then	dbg_info.name = fnc_name
+                end
+		dbg_info.currentline_txt = curr_line
+		dbg_info.source_code = fnc_code
+		mcr_src = dbg_info.source:sub(2)
+		mcr_inf = win.GetFileInfo(mcr_src)
+		if	mode_upvals and mode_upvals > 0
+		then	for	ii = 1, dbg_info.nups
+			do	local n, v = debug.getupvalue(dbg_info.func, ii)
+				if band(mode_upvals, 2) == 2
+				then tbl_upvals[with_nums and "["..ii.."] "..n or n] = v or "<NIL>"
 				end
-				self:add_f("%s%s = %s%s\n", prefix, name, string.gsub(safe_tostring(value), "^table: ", "TBL:"), txt.."}")
 			end
-		elseif	type(value) == "function"
-		then	local	info = self.getinfo(value, "nS")
-			local	fun_name = info.name or m_syst_known_functions[value] or m_user_known_functions[value]
-			if	info.what == "C"
-			then	self:add_f("%s%s = C %s\n", prefix, name, string.gsub(fun_name and "function:"..fun_name or tostring(value), "^function: ",  "FNC:"))
-			else	local	source = info.short_src
-				
-				fun_name = fun_name or fnc_guess_more_func_info(info)
-				self:add_f("%s%s = func '%s' def at %d-%d of chunk <%s>\n", prefix, name, fun_name, info.linedefined, info.lastlinedefined, source)
-			end
-		elseif	type(value) == "thread"
-		then	self:add_f("%sthread %q = %s\n", prefix, name, tostring(value))
 		end
+		if	mode_locals and mode_locals > 0
+		then	local	ii = 0
+			while	true
+			do	ii = ii + 1
+				local n, v
+				if	is_same_thr
+				then	n, v = debug.getlocal(src_lev, ii)
+				else	n, v = debug.getlocal(src_thr, src_lev, ii)
+				end
+				v = type(v) == "nil" and "<NIL>" or v
+			        if not n then break end
+				if band(mode_locals, 2) == 2
+				then tbl_locals[with_nums and "["..ii.."] "..n or n] = v
+				end
+				tbl_locals._VAR_MAP.raw[n] = v
+				tbl_locals._VAR_MAP.n2i[n] = ii
+				tbl_locals._VAR_MAP.i2n[ii]= n
+			end
+		end
+	elseif	type(src_lev) == "string"
+	then	mcr_inf = win.GetFileInfo(src_lev)
+		if mcr_inf then mcr_src = src_lev end
 	end
-	return tbl_locals
+	if mcr_src then mcr_src = far.ConvertPath(mcr_src, 1) end
+	return mcr_src, mcr_inf, mcr_inf and mcr_inf.LastWriteTime, tbl_locals, tbl_upvals, dbg_info
 end
 
-function stacktrace_X(src_thr, orig_err_msg_file, orig_err_msg_line, orig_err_msg_text, orig_err_msg)
-	local tbl_lev_info = {}
-	local tbl_lev_path = {}
-	local level = -1
-	local is_outer = not orig_err_msg_file and true or false
-	while true
-	do	level = level + 1
-		local src, src_inf, mod, lcl, upv, inf = fnc_source_info_get(src_thr, level, nil, 2, 2)
-		if not inf then break end
-		tbl_lev_info[#tbl_lev_info + 1] = {}
-		tbl_lev_info[#tbl_lev_info].INF = inf
-		tbl_lev_info[#tbl_lev_info].LCL = lcl
-		tbl_lev_info[#tbl_lev_info].UPV = upv
-		tbl_lev_info[#tbl_lev_info].inf = inf.what..":" and (inf.namewhat ~= "" and inf.namewhat or inf.short_src)
-		if	orig_err_msg_file
-		and	orig_err_msg_file == inf.short_src
-		and	orig_err_msg_line == inf.currentline
-		then	is_outer = true
-			tbl_lev_info[#tbl_lev_info].ERROR_TEXT = orig_err_msg_text
-			tbl_lev_info[#tbl_lev_info].ERROR_FILE = orig_err_msg_file
-			tbl_lev_info[#tbl_lev_info].ERROR_LINE = orig_err_msg_line
-			tbl_lev_info[#tbl_lev_info].INF.ERROR  = orig_err_msg_text
+
+local all_the_stuff = {}
+for ii = 0, 1000 do
+	local mcr_src, mcr_inf, LastWriteTime, tbl_locals, tbl_upvals, dbg_info = Xer0X.fnc_source_info_get(nil, ii, nil, 2, 2, false)
+	if not dbg_info then break end
+	all_the_stuff[ii + 1] = { mcr_src = mcr_src, mcr_inf = mcr_inf, LastWriteTime = LastWriteTime, tbl_locals = tbl_locals, tbl_upvals = tbl_upvals, dbg_info = dbg_info }
+	if	tbl_upvals.LoadedMacros
+	then    Xer0X.utils = tbl_upvals
+		Xer0X.utils_local = tbl_locals
+	elseif	tbl_upvals.KeyMacro
+	then	Xer0X.key_mcr_inf = tbl_upvals
+		Xer0X.key_mcr_inf_loc = tbl_locals
+	end
+end
+_G.Xer0X.internals = all_the_stuff
+
+local tbl_macrolist_marks = {}
+local tbl_mcr_items_marks = {}
+Xer0X.fnc_find_macrolist = function(mark_id)
+	mark_id = mark_id and ":"..mark_id or ":?"
+	local ii_from, all_the_stuff
+	local	tbl_mcr_lst_upv,
+		tbl_mcr_lst_loc,
+		tbl_mcr_items_U,
+		tbl_mcr_items_L
+	local tbl_mcr_lst_upv_idx = tbl_macrolist_marks["UPV"..mark_id]
+	local tbl_mcr_lst_loc_idx = tbl_macrolist_marks["LOC"..mark_id]
+	local tbl_mcr_items_L_idx = tbl_mcr_items_marks["LOC"..mark_id]
+	local found =
+		tbl_mcr_lst_upv_idx or
+		tbl_mcr_lst_loc_idx
+	local	var_key, var_val, dbg_inf
+	if	tbl_mcr_lst_loc_idx
+	then	dbg_inf = debug.getinfo(tbl_mcr_lst_loc_idx - 1)
+		if	dbg_inf
+		then	var_key, var_val = debug.getlocal(tbl_mcr_lst_loc_idx - 1, Xer0X.env_mcr_lst_loc._VAR_MAP.n2i.macrolist)
 		end
-		if not	is_outer
-		then	tbl_lev_path[#tbl_lev_path + 1] = level..">"
+		if	var_key == "macrolist"
+		then	tbl_mcr_lst_loc = var_val
+			found = true
+		else	found = false
 		end
-		if	#tbl_lev_info > 1
-		then	tbl_lev_info[#tbl_lev_info - 1][(level - 1)..">"] = tbl_lev_info[#tbl_lev_info]
+		if	found
+		then	var_key, var_val = debug.getlocal(tbl_mcr_items_L_idx - 1, Xer0X.env_mcr_items_L._VAR_MAP.n2i.menuitems)
+			if	var_key == "menuitems"
+			then	tbl_mcr_items_L = var_val
+				goto end_of_proc
+			else	found = false
+			end
 		end
 	end
-	return	tbl_lev_info[1], tbl_lev_path
+	ii_from = found and (tbl_mcr_lst_loc_idx or tbl_mcr_lst_upv_idx) or 1
+	all_the_stuff = {}
+	for ii = ii_from, 1000 do
+		local mcr_src, mcr_inf, LastWriteTime, tbl_locals, tbl_upvals, dbg_inf
+			= Xer0X.fnc_source_info_get(nil, ii, nil, 2, 2, false)
+		if not dbg_inf then break end
+		all_the_stuff[ii] = { mcr_src = mcr_src, mcr_inf = mcr_inf, LastWriteTime = LastWriteTime, tbl_locals = tbl_locals, tbl_upvals = tbl_upvals, dbg_inf = dbg_inf }
+		if	tbl_upvals.macrolist
+		then
+			Xer0X.env_mcr_lst_upv = tbl_upvals
+			Xer0X.env_mcr_lst_upv.LEVEL = ii
+			Xer0X.env_mcr_lst_upv_loc = tbl_locals
+			Xer0X.env_mcr_lst_upv_idx = ii
+			tbl_mcr_lst_upv = tbl_upvals.macrolist
+			tbl_macrolist_marks["UPV"..mark_id] = ii
+			found = true
+		end
+		if	tbl_locals.macrolist
+		then
+			Xer0X.env_mcr_lst_loc = tbl_locals
+			Xer0X.env_mcr_lst_loc_upv = tbl_upvalues
+			Xer0X.env_mcr_lst_loc.LEVEL = ii
+			Xer0X.env_mcr_lst_loc_idx = ii
+			tbl_mcr_lst_loc = tbl_locals.macrolist
+			tbl_macrolist_marks["LOC"..mark_id] = ii
+			found = true
+		end
+		if	tbl_locals.menuitems
+		then
+			Xer0X.env_mcr_items_L = tbl_locals
+			Xer0X.env_mcr_items_L_upv = tbl_upvalues
+			Xer0X.env_mcr_items_L.LEVEL = ii
+			Xer0X.env_mcr_items_L_idx = ii
+			tbl_mcr_items_L = tbl_locals.menuitems
+			tbl_mcr_items_marks["LOC"..mark_id] = ii
+		end
+	end
+	if	found
+	then	Xer0X.env_mcr_lst_full_stack = all_the_stuff
+	end
+	::end_of_proc::
+	return found, tbl_mcr_lst_upv, tbl_mcr_lst_loc, tbl_mcr_items_L
 end
 
-function _M.fnc_stack_trace(thread, message, level, header_kind, outer_only, p6, p7, p8, p9, p10, p11, p12)
-	local is_same_thr = -1
-	local thr_curr = coroutine.running()
-	if type(thread) == "thread"
-	then	is_same_thr = thread == thr_curr and 2 or 0
-	else 	is_same_thr = 1
-		-- shift parameters left
-		thread, message, level, header_kind,	outer_only,		p6, p7 =
-		thr_curr,thread, message, level,	header_kind,	outer_only, p6
-	end
-	if type(level) == "string"
-	then    local header_type_str = level
-		level = nil
-		if header_type_str == "no_header"
-		then	header_kind = 2
-		else	header_kind = nil
-		end
-	end
-	local	header_text
-	if	header_kind == nil
-	then	header_text = [[
-Stack traceback
-===============
-]]	elseif	header_kind == 1
-	then	header_text = [[
-===============
-]]	elseif	header_kind == 2
-	then	header_text = nil
-	end
-	local	colon = header_kind and "$" or ":"
-	level = level or 0
-	local	dumper = Dumper.new(thread)
-	if	header_text
-	then	dumper:add(header_text)
-	end
-	if	type(message) == "table"
-	then	dumper:add("an error object {\n")
-		local	first = true
-		for	k, v in pairs(message)
-		do	if	first
-			then	dumper:add(" ")
-				first = false
-			else    dumper:add(",\n")
+Xer0X.fnc_mcr_src_tbl_clean = function(mcr_src, tbl_mcr)
+	mcr_src = string.lower(mcr_src)
+	local tbl_rebind_guids = Xer0X.ReBind and Xer0X.ReBind.GUIDs
+	local mcr_cnt = #tbl_mcr
+	local mcr_rem = 0
+	local ii_mcr, ii_skip, ii_guid
+	for	ii = 1, mcr_cnt
+	do	ii_mcr = tbl_mcr[ii]
+		if  ii_mcr and type(ii_mcr) == "table"
+		then
+			ii_skip = 0
+			if
+				ii_mcr.FileName
+			and	mcr_src == string.lower(ii_mcr.FileName)
+			then	mcr_rem = mcr_rem + 1
+				if	tbl_rebind_guids
+				then	tbl_rebind_guids[ii_mcr.id or ii_mcr.guid] = nil
+				end
+				ii_skip = 1
 			end
-			dumper:add(string.gsub(safe_tostring(k), "%.lua:", ".lua"..colon))
-			dumper:add(colon.." ")
-			dumper:add(string.gsub(safe_tostring(v), "%.lua:", ".lua"..colon))
-		end
-		dumper:add("\n}")
-	elseif
-		type(message) == "string"
-	then
-		if not	header_kind
-		then	dumper:add(string.gsub(message, "%.lua:", "%.lua"..colon))
-			dumper:add("\n")
-		else
+			if	mcr_rem > 0
+			then	tbl_mcr[ii - mcr_rem + ii_skip] = tbl_mcr[ii]
+				tbl_mcr[ii] = nil
+			end
 		end
 	end
-	local orig_err_msg_file, orig_err_msg_line, orig_err_msg_text = string.match(message or "", "^(.+):(%d+): (.+)$")
-	if dumper.dumping_same_thread then level = level + 1 end
-	local	tbl_level_locals = {}
-	local	level_to_show = 0
-	while	true
-	do
-		local info, source, src_test, src_is_file, what_prev, src_file_path_orig, src_file_path, src_file_type, src_func_name, level_to_show_str, src_func_name_guess, src_curr_line_guess
-		info = dumper.getinfo(level, "nSlfu")
-		if not info then break end
-		source	= info.short_src
-		src_test = info.source
-		src_file_type = src_test and src_test:sub(1, 1)
-		src_is_file = (
-			src_file_type == "@" or
-			src_file_type == "#"
+	for	ii, ii_mcr in pairs(tbl_mcr)
+	do	if	type(ii_mcr) == "table"
+		and	mcr_src == string.lower(ii_mcr.FileName or "<NO-FILE-SOURCE-FOR-THIS-MACRO>")
+		then	if	tbl_rebind_guids
+			then	ii_guid = tbl_mcr[ii].id or tbl_mcr[ii].guid
+				if	ii_guid
+				and	tbl_rebind_guids[ii_guid]
+				then	tbl_rebind_guids[ii_guid] = nil
+				end
+			end
+			tbl_mcr[ii] = nil
+		end
+	end
+end
+
+Xer0X.fnc_mcr_src_agg_clean = function(mcr_src, tbl_agg)
+	mcr_src = string.lower(mcr_src)
+	for	ii_one, tbl_one in pairs(tbl_agg)
+	do	for	ii_mcr, tbl_mcr in pairs(tbl_one)
+		do      if tbl_mcr.FileName
+			then	Xer0X.fnc_mcr_src_tbl_clean(mcr_src, tbl_one)
+				break
+			else 	Xer0X.fnc_mcr_src_tbl_clean(mcr_src, tbl_mcr)
+			end
+		end
+		for	ii_mcr = 1, #tbl_one
+		do      if not tbl_one[ii_mcr].FileName then
+				Xer0X.fnc_mcr_src_tbl_clean(mcr_src, tbl_one[ii_mcr])
+			end
+		end
+	end
+	for	ii_agg = 1, #tbl_agg
+	do	for	ii_mcr, tbl_mcr in pairs(tbl_agg[ii_agg])
+		do      if tbl_mcr.FileName
+			then	Xer0X.fnc_mcr_src_tbl_clean(mcr_src, tbl_agg[ii_agg])
+				break
+			else	Xer0X.fnc_mcr_src_tbl_clean(mcr_src, tbl_mcr)
+			end
+		end
+		for	ii_mcr = 1, #tbl_agg[ii_agg]
+		do      if not tbl_agg[ii_agg][ii_mcr].FileName then
+				Xer0X.fnc_mcr_src_tbl_clean(mcr_src, tbl_agg[ii_agg][ii_mcr])
+			end
+		end
+	end
+end
+
+Xer0X.fnc_mcr_src_fnc_clean__v0 = function(mcr_src, tbl_fnc)
+	mcr_src = string.lower(mcr_src)
+	local fnc_scr_path, cc_to_del
+	local rem_cnt = 0
+	for	ii_cc = 1, #tbl_fnc
+	do      for	ii_ccf, ccf in pairs(tbl_fnc[ii_cc - rem_cnt])
+		do	if type(ccf) == "function" then
+				fnc_scr_path = string.match(debug.getinfo(ccf, "S").source, "^@(.+)")
+				if mcr_src == string.lower(fnc_scr_path)
+				then	tbl_fnc[ii_cc - rem_cnt][ii_ccf] = nil
+				end
+			end
+		end
+		if	next(tbl_fnc[ii_cc - rem_cnt]) == nil
+		then	table.remove(tbl_fnc, ii_cc - rem_cnt)
+			rem_cnt = rem_cnt + 1
+		end
+	end
+end
+
+Xer0X.fnc_mcr_src_fnc_clean = function(mcr_src, tbl_fnc)
+	mcr_src = string.lower(mcr_src)
+	local fnc_scr_path
+	local rem_cnt = 0
+	for	ii_cc = 1, #tbl_fnc - rem_cnt
+	do      for	ii_ccf, ccf in pairs(tbl_fnc[ii_cc - rem_cnt])
+		do	if type(ccf) == "function" then
+				fnc_scr_path = string.match(debug.getinfo(ccf, "S").source, "^@(.+)")
+				if mcr_src == string.lower(fnc_scr_path)
+				then	table.remove(tbl_fnc, ii_cc - rem_cnt)
+					rem_cnt = rem_cnt + 1
+					break
+				end
+			end
+		end
+	end
+end
+
+Xer0X.fnc_mcr_src_all_clean = function(mcr_src, tbl_what)
+	if not tbl_what or tbl_what.macro then Xer0X.fnc_mcr_src_tbl_clean(mcr_src, Xer0X.utils.LoadedMacros)	end
+	if not tbl_what or tbl_what.pnlmd then Xer0X.fnc_mcr_src_tbl_clean(mcr_src, Xer0X.utils.LoadedPanelModules)end
+	if not tbl_what or tbl_what.cmdln then Xer0X.fnc_mcr_src_tbl_clean(mcr_src, Xer0X.utils.AddedPrefixes)	end
+	if not tbl_what or tbl_what.mnitm then Xer0X.fnc_mcr_src_tbl_clean(mcr_src, Xer0X.utils.AddedMenuItems)	end
+	if not tbl_what or tbl_what.macro then Xer0X.fnc_mcr_src_agg_clean(mcr_src, Xer0X.utils.Areas)          end
+	if not tbl_what or tbl_what.event then Xer0X.fnc_mcr_src_agg_clean(mcr_src, Xer0X.utils.Events)		end
+	if not tbl_what or tbl_what.cncol then Xer0X.fnc_mcr_src_fnc_clean(mcr_src, Xer0X.utils.ContentColumns) end
+end
+
+Xer0X.fnc_macro_one_load = function(mcr_info, mcr_path)
+	mcr_path = far.ConvertPath(mcr_path, 1)
+	Xer0X.fnc_mcr_src_all_clean(mcr_path)
+	collectgarbage("collect")
+	local	fnc, msg = loadfile(mcr_path)
+	if not	fnc
+	then	far.Message(msg, "Error loading macro file", nil, "w") return
+	end
+	local tbl_env_mcr_ini = {
+		Macro		= function(srctable) Xer0X.utils.AddRegularMacro(	srctable, mcr_path) end,
+		Event		= function(srctable) Xer0X.utils.AddEvent(		srctable, mcr_path) end,
+		MenuItem	= function(srctable) Xer0X.utils.AddMenuItem(		srctable, mcr_path) end,
+	        CommandLine	= function(srctable) Xer0X.utils.AddPrefixes(		srctable, mcr_path) end,
+		PanelModule	= function(srctable) Xer0X.utils.AddPanelModule(	srctable, mcr_path) end,
+		ContentColumns	= function(srctable) Xer0X.utils.AddContentColumns(	srctable, mcr_path) end,
+		LoadRegularFile	= Xer0X.utils_local.LoadRegularFile
+			}
+	local fnc_dummy = function() end
+	local tbl_no_fnc_list = { "NoMacro", "NoEvent", "NoMenuItem", "NoCommandLine", "NoPanelModule", "NoContentColumns" }
+	local mt_g = { __index = _G }
+	for _, fnc_name in ipairs(tbl_no_fnc_list) do tbl_env_mcr_ini[fnc_name] = fnc_dummy; end
+	setmetatable(tbl_env_mcr_ini, mt_g)
+	setfenv(fnc, tbl_env_mcr_ini)
+	local	ret, msg = pcall(fnc, mcr_path)
+	if not	ret
+	then	far.Message(msg, "Error loading macro func (introspection-@Xer0X)", nil, "w")
+	end
+end
+
+Xer0X.fnc_macro_dir_load = function(src_dir)
+	far.RecursiveSearch(
+		src_dir ,
+		"*.lua",
+		Xer0X.fnc_macro_one_load,
+		0
+			)
+end
+
+-- @@@@@ End of the trick with ad-hoc loading macros  @@@@@ ?
+
+Xer0X.fnc_file_whoami = function(inp_args, from_level, details)
+	local	dbg_info = debug.getinfo(from_level or 2, details or "S")
+	local	own_file_path, own_file_fold, own_file_name, own_file_extn
+	if 	dbg_info.source
+	then	if	string.match(dbg_info.short_src, "^%[.*%]$")
+		then	own_file_path = dbg_info.short_src
+		else	own_file_path = dbg_info.source:match("^@(.+)")
+			own_file_fold, own_file_name, own_file_extn = string.match(own_file_path, "(.-)([^/\\]+)([.][^.]+)$")
+		end
+	end
+	local	own_mdl_head, own_mdl_tail, as_module
+	local	the_mdl_name = type(inp_args) == "table" and #inp_args > 0 and inp_args[1] or inp_args
+	if	the_mdl_name
+	and	type(the_mdl_name) == "string"
+	then	own_mdl_head = the_mdl_name:match("^(.*)%.")
+		own_mdl_tail = the_mdl_name:match("[.](.*)$")
+		as_module = (
+			the_mdl_name == "load_as_module" or
+			the_mdl_name == own_file_name or
+			own_mdl_head and
+			the_mdl_name:match("%.("..own_file_name..")$") == own_file_name and
+			own_file_fold:match("\\("..own_mdl_head..")\\$")==own_mdl_head
 				)
-		src_file_path_orig = src_is_file and src_test:sub(2)
-		src_file_path = NORMALIZE_PATH and fnc_norm_script_path(src_file_path_orig)
-			or src_file_path_orig
-
-	
-		
-		level_to_show		= level_to_show + 1
-		level_to_show_str	= level_to_show == 1
-			and "===ADDITIONAL=== "
-			or string.format("%d#==", level_to_show)
-		src_func_name = (
-			info.what == "C" or
-			info.what == "Lua"
-				) and (
-			m_user_known_functions[info.func] or
-			m_syst_known_functions[info.func] or
-			info.name
-				)
-		src_func_name_guess,
-		src_curr_line_guess
-			= fnc_guess_more_func_info(info)
-		if
-			info.what == "main"
-		then
-			if	src_file_type == "@"
-			then	dumper:add_f("%smain chunk of <%s> at %d\n"		, level_to_show_str,	src_file_path,	info.currentline)
-			else	dumper:add_f("%smain chunk of <%s> at %d\n"		, level_to_show_str,	info.short_src,	info.currentline)
-			end
-			if	src_curr_line_guess
-			then	dumper:add_f("%s#%d:%s\n"				, level_to_show,	info.currentline, string.match(src_curr_line_guess, "^%s*(.-)%s*$"))
-			end
-		elseif
-			info.what == "C"
-		then
-			dumper:add_f("%s%s C func '%s'\n"				, level_to_show_str,	info.namewhat, src_func_name or tostring(info.func))
-		--	dumper:add_f("%s%s = C %s\n", prefix, name, (m_syst_known_functions[value] and ("function:"..m_syst_known_functions[value]) or tostring(value)))
-		elseif
-			info.what == "tail"
-		then
-			dumper:add_f("%stail call\n"					, level_to_show_str)
-			tbl_level_locals[#tbl_level_locals + 1] = dumper:DumpLocals(level,level_to_show, header_kind)
-		elseif
-			info.what == "Lua"
-		then
-			if	source:sub(2, 7) == "string"
-			then	source = source:sub(9)
-			end
-			local	was_fnc_guess = false
-			if not	src_func_name or
-				src_func_name == "?"
-			then	src_func_name = src_func_name_guess
-				was_fnc_guess = true
-			end
-			-- test if we have a file name
-			local	func_type = info.namewhat == "" and "FNC" or info.namewhat
-			if	src_file_type == "@"
-			then	dumper:add_f("%s%s '%s' at <%s%s%d>%s\n"		, level_to_show_str,	func_type,	src_func_name, src_file_path, colon, info.currentline, was_fnc_guess and " (best guess)" or "")
-			elseif	src_file_type == '#'
-			then	dumper:add_f("%s%s '%s' at template '%s%s%d'%s\n"	, level_to_show_str,	func_type,	src_func_name, src_file_path, colon, info.currentline, was_fnc_guess and " (best guess)" or "")
-			else	dumper:add_f("%s%s '%s' at %d of chunk <%s>\n"		, level_to_show_str,	func_type,	src_func_name, info.currentline, source)
-			end
-			if	src_curr_line_guess
-			then	dumper:add_f("%s#%d:%s\n"				, level_to_show,	info.currentline, string.match(src_curr_line_guess, "^%s*(.-)%s*$"))
-			end
-			tbl_level_locals[#tbl_level_locals + 1] =
-				dumper:DumpLocals(level					, level_to_show,	header_kind)
-			tbl_level_locals[#tbl_level_locals].SHOW_LEVEL = level_to_show
-		else		dumper:add_f("%s!unknown frame %s\n"			, level_to_show_str,	info.what)
-		end
-		level = level + 1
 	end
-	local tbl_dbg_stack, tbl_dbg_path = stacktrace_X(thread, orig_err_msg_file, orig_err_msg_line and tonumber(orig_err_msg_line), orig_err_msg_text, message)
-	table.insert(tbl_dbg_path, 1, "tbl_dbg_stack")
-	local message_new = dumper:concat_lines()
-	message_new = string.gsub(message_new, "%.Lua"	, ".lua")
-	message_new = string.gsub(message_new, "%.LUA"	, ".lua")
-	message_new = string.gsub(message_new, "%.lua:"	, ".lua$")
-	message_new = string.gsub(message_new, "  "	, " ")
-	message_new = string.gsub(message_new, "\r\n"	, "\n")
-	return {
-		thread = thread,
-		message = message,
-		level = level,
-		thread_is_same = is_same_thr,
-		message_new = message_new,
-		tbl_dbg_stack = tbl_dbg_stack,
-		tbl_lev_locals = tbl_level_locals,
-		user_known_tables = m_user_known_tables,
-		syst_known_tables = m_syst_known_tables
-	}, tbl_dbg_path
-end --	_M.fnc_stack_trace()
-
-function _M.stacktrace(...)
-	local tbl_info = _M.fnc_stack_trace(...)
-	return tbl_info.message
+	return as_module, inp_args, own_file_path, own_file_fold, own_file_name, own_file_extn, dbg_info.short_src, dbg_info.name, dbg_info.currentline, dbg_info
 end
-local is_mdl, tbl_args, own_file_path, own_file_fold, own_file_name, own_file_extn
-	= fnc_file_whoami(...)
 
-return _M
+Xer0X.fnc_mcr_src_reload = function(mcr_src, mcr_src_inf_mod, force)
+	local dt_inf_new = win.GetFileInfo(mcr_src)
+	if not force and dt_inf_new.LastWriteTime == mcr_src_inf_mod then return end
+	Xer0X.fnc_load_macro_one(nil, mcr_src)
+	Xer0X.fnc_trans_msg("\n"..Xer0X.fnc_norm_script_path(mcr_src).."\n", "Macro reloaded, please rerun the action", "w", "pers")
+	return true
+end
+
+return {
+	fnc_mcr_src_agg_clean	= fnc_mcr_src_agg_clean,
+	fnc_mcr_src_all_clean	= fnc_mcr_src_all_clean,
+	fnc_mcr_src_fnc_clean	= fnc_mcr_src_fnc_clean,
+	fnc_mcr_src_tbl_clean	= fnc_mcr_src_tbl_clean,
+	fnc_source_info_get	= fnc_source_info_get,
+	fnc_func_name_guess	= fnc_func_name_guess,
+	fnc_macro_dir_load	= fnc_macro_dir_load,
+	fnc_macro_one_load	= fnc_macro_one_load,
+	fnc_definition_parse	= fnc_definition_parse,
+}
