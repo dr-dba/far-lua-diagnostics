@@ -1,9 +1,6 @@
 ﻿
 --[[	@Xer0X CopyLeft 2020
 	Православие или Смерть! Group
-	White Power Resistance Commando@line team
-	..
-	!Presenting to you!
 
 	This script is modification,
 	and, hopefuly, iprovement,
