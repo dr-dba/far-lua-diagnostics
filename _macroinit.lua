@@ -1,4 +1,5 @@
-﻿require("Lib-Common-@Xer0X")
+if not Xer0X then Xer0X = { } end
+require("Lib-Common-@Xer0X")
 require("introspection-@Xer0X")
 local	ok, err_msg, le = Xer0X.fnc_safe_require("LE")
 if	ok 
