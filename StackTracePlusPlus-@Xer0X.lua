@@ -23,13 +23,16 @@ if true then return end --]]
 See the _macroinit.lua file in the same repository
 --]]
 
+if not Xer0X then Xer0X = { } end
+require("Lib-Common-@Xer0X.LUA")
+require("introspection-@Xer0X")
+
 -- tables
 local _G = _G, sz_mdl_own_file
 local string, io, debug, coroutine = string, io, debug, coroutine
 
 -- functions
-local
-	tostring, print, require, next, assert, pcall, type, pairs, ipairs, error =
+local	tostring, print, require, next, assert, pcall, type, pairs, ipairs, error =
 	tostring, print, require, next, assert, pcall, type, pairs, ipairs, error
 
 assert(debug, "debug table must be available at this point")
@@ -70,7 +73,7 @@ add_known_module("bit", "bit module")
 add_known_module("jit", "jit module")
 -- lua5.3
 if _VERSION >= "Lua 5.3" then
-	add_known_module("utf8", "utf8 module")
+add_known_module("utf8", "utf8 module")
 end
 
 -- by @XeRoX:
@@ -87,8 +90,6 @@ local fnc_norm_script_path	= Xer0X.fnc_norm_script_path
 
 if not Xer0X then Xer0X = {} end
 
-
-local mdl_intro = require("introspection-@Xer0X")
 
 local m_user_known_tables = {}
 local m_syst_known_functions = {}
