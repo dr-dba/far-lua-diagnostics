@@ -8,7 +8,7 @@ if true then return end --]]
 
 	This script is modification,
 	and, hopefuly, iprovement,
-	of this great script:
+	of this great utility:
 	https://github.com/ignacio/StackTracePlus
 	also see here:
 	https://forum.farmanager.com/viewtopic.php?f=15&t=9611&p=130485&hilit=stacktrace#p130485
@@ -24,7 +24,7 @@ See the _macroinit.lua file in the same repository
 --]]
 
 if not Xer0X then Xer0X = { } end
-require("Lib-Common-@Xer0X.LUA")
+require("Lib-Common-@Xer0X")
 require("introspection-@Xer0X")
 
 -- tables
