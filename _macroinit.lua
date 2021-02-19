@@ -1,5 +1,4 @@
 require("Lib-Common-@Xer0X")
-Xer0X.fnc_far_mod_require("ffi-usg")
 local ok, err_msg, le = Xer0X.fnc_safe_require("LuaExplorer-@Xer0X")
 if ok then _G.LE = le; _G.le = le; end
 if not	debug.traceback__orig
