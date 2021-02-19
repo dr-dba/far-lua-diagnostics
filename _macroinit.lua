@@ -17,8 +17,7 @@ debug.traceback = function(...)
 	local tbl_args = { ... }
 	tbl_args[#tbl_args + 1] = 1
 	tbl_args[#tbl_args + 1] = "no_header"
-	tbl_args[#tbl_args + 1] = true
-		
+	tbl_args[#tbl_args + 1] = true		
 	local tbl_stack, tbl_path = stp.fnc_stack_trace(unpack(tbl_args))
 	Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_plus.txt", tbl_stack.message_new)
 	far.Timer(1, function(sender)
