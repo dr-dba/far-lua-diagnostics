@@ -135,21 +135,22 @@ Returns '(anonymous)' if no function name was found in the line
 --]]
 local function ParseLine(line)
 	assert(type(line) == "string")
+--	print(line)
 	local match
 	match = line:match("^%s*function%s+(%w+)")
-	if match then
+	if match then -- print("+++++++++++++function", match)
 		return match
 	end
 	match = line:match("^%s*local%s+function%s+(%w+)")
-	if match then
+	if match then -- print("++++++++++++local", match)
 		return match
 	end
 	match = line:match("^%s*local%s+(%w+)%s+=%s+function")
-	if match then
+	if match then -- print("++++++++++++local func", match)
 		return match
 	end
 	match = line:match("%s*function%s*%(")
-	if match then
+	if match then -- print("+++++++++++++function2", match)
 		return "(anonymous)"
 	end
 	return "(anonymous)"
@@ -158,8 +159,7 @@ end
 --[[ Private:
 Tries to guess a function's name when the debug info structure does not have it.
 It parses either the file or the string where the function is defined.
-Returns '?' if the line where the function is defined is not found
---]]
+Returns '?' if the line where the function is defined is not found. ]]
 local function fnc_guess_more_func_info(info)
 	local file, err, line_now, line_def
 	if	type(info.source) == "string" and
@@ -207,20 +207,20 @@ local Dumper = {}
 Dumper.new = function(thread)
 	local t = { lines = {} }
 	for k, v in pairs(Dumper) do t[k] = v end
-	t.dumping_same_thread = thread == coroutine.running()
+	t.dump_same_thread = thread == coroutine.running()
 --[[	if a thread was supplied, bind it to debug.info and debug.get
-	we also need to skip this additional level we are introducing in the callstack (only if we are running
-	in the same thread we're inspecting) ]]
+	we also need to skip this additional level we are introducing in the callstack
+	(only if we are running	in the same thread we're inspecting) ]]
 	if type(thread) == "thread"
 	then
 		t.getinfo = function(level, what)
-			if t.dumping_same_thread and type(level) == "number"
+			if t.dump_same_thread and type(level) == "number"
 			then level = level + 1
 			end
 			return debug.getinfo(thread, level, what)
 		end
 		t.getlocal = function(level, loc)
-			if t.dumping_same_thread
+			if t.dump_same_thread
 			then level = level + 1
 			end
 			return debug.getlocal(thread, level, loc)
@@ -254,8 +254,8 @@ function Dumper:DumpLocals(level, level_to_show, tbl_locals, header_kind)
 		tbl_locals = {}
 	end
 	local test_info = self.getinfo(level, "nS")
-	if  not test_info then return end
-	if self.dumping_same_thread then level = level + 1 end
+	if not test_info then return end
+	if self.dump_same_thread then level = level + 1 end
 	prefix = header_kind and string.format("%s|", level_to_show) or "\t"
 	local i = 0
 	while	true
@@ -318,16 +318,16 @@ function Dumper:DumpLocals(level, level_to_show, tbl_locals, header_kind)
 	return tbl_locals
 end
 
-function stacktrace_X(src_thr, orig_err_msg_file, orig_err_msg_line, orig_err_msg_text, orig_err_msg)
-	local tbl_lev_info = {}
-	local tbl_lev_path = {}
+function stacktrace_X(src_thr, orig_err_msg_file, orig_err_msg_line, orig_err_msg_text, orig_err_msg, p1, p2, p3)
+	local tbl_lev_info = { }
+	local tbl_lev_path = { }
 	local level = -1 -- is_same and 0 or -1
 	local is_outer = not orig_err_msg_file and true or false
 	while true
 	do	level = level + 1
 		local src, src_inf, mod, lcl, upv, inf = fnc_source_info_get(src_thr, level, nil, 2, 2)
 		if not inf then break end
-		tbl_lev_info[#tbl_lev_info + 1] = {}
+		tbl_lev_info[#tbl_lev_info + 1] = { }
 		tbl_lev_info[#tbl_lev_info].INF = inf
 		tbl_lev_info[#tbl_lev_info].LCL = lcl
 		tbl_lev_info[#tbl_lev_info].UPV = upv
@@ -420,7 +420,7 @@ Stack traceback
 		end
 	end
 	local orig_err_msg_file, orig_err_msg_line, orig_err_msg_text = string.match(message or "", "^(.+):(%d+): (.+)$")
-	if dumper.dumping_same_thread then level = level + 1 end
+	if dumper.dump_same_thread then level = level + 1 end
 	local	tbl_level_locals = {}
 	local	level_to_show = 0
 	while	true
@@ -428,7 +428,7 @@ Stack traceback
 		local info, source, src_test, src_is_file, what_prev, src_file_path_orig, src_file_path, src_file_type, src_func_name, level_to_show_str, src_func_name_guess, src_curr_line_guess
 		info = dumper.getinfo(level, "nSlfu")
 		if not info then break end
-		source	= info.short_src
+		source = info.short_src
 		src_test = info.source
 		src_file_type = src_test and src_test:sub(1, 1)
 		src_is_file = (
@@ -456,6 +456,7 @@ Stack traceback
 		src_func_name_guess,
 		src_curr_line_guess
 			= fnc_guess_more_func_info(info)
+		src_curr_line_guess = src_curr_line_guess and string.gsub(Xer0X.fnc_str_trim1(src_curr_line_guess), "\t", " ") or nil
 		if
 			info.what == "main"
 		then
@@ -464,7 +465,7 @@ Stack traceback
 			else	dumper:add_f("%smain chunk of <%s> at %d\n"		, level_to_show_str,	info.short_src,	info.currentline)
 			end
 			if	src_curr_line_guess
-			then	dumper:add_f("%s#%d:%s\n"				, level_to_show,	info.currentline, string.match(src_curr_line_guess, "^%s*(.-)%s*$"))
+			then	dumper:add_f("%s#%d:%s\n"				, level_to_show,	info.currentline, src_curr_line_guess)
 			end
 		elseif
 			info.what == "C"
@@ -478,10 +479,7 @@ Stack traceback
 			tbl_level_locals[#tbl_level_locals + 1] = dumper:DumpLocals(level,level_to_show, header_kind)
 		elseif
 			info.what == "Lua"
-		then
-			if	source:sub(2, 7) == "string"
-			then	source = source:sub(9)
-			end
+		then	
 			local	was_fnc_guess = false
 			if not	src_func_name or
 				src_func_name == "?"
@@ -497,7 +495,7 @@ Stack traceback
 			else	dumper:add_f("%s%s '%s' at %d of chunk <%s>\n"		, level_to_show_str,	func_type,	src_func_name, info.currentline, source)
 			end
 			if	src_curr_line_guess
-			then	dumper:add_f("%s#%d:%s\n"				, level_to_show,	info.currentline, string.match(src_curr_line_guess, "^%s*(.-)%s*$"))
+			then	dumper:add_f("%s#%d:%s\n"				, level_to_show,	info.currentline, src_curr_line_guess)
 			end
 			tbl_level_locals[#tbl_level_locals + 1] =
 				dumper:DumpLocals(level					, level_to_show,	header_kind)
@@ -535,3 +533,5 @@ local is_mdl, tbl_args, own_file_path, own_file_fold, own_file_name, own_file_ex
 	= fnc_file_whoami(...)
 
 return _M
+
+-- @@@@@
