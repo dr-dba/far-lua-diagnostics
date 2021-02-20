@@ -1,5 +1,5 @@
 # far-lua-diagnostics
-Lua debug trace, fork of StackTracePlus@Ignacio,<br />
+Lua debug trace, fork of <a src="https://github.com/ignacio/StackTracePlus">StackTracePlus@Ignacio</a>,<br />
 will work only in FAR manager environment<br /><br />
 FAR manager:<br />
 https://farmanager.com/<br />
