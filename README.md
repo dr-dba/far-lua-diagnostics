@@ -1,6 +1,8 @@
 # far-lua-diagnostics
-Lua debug trace, fork of StackTracePlus@Ignacio, will work only in FAR manager environment
-FAR manager:
-https://farmanager.com/
-FAR manager forum discussion:
-https://forum.farmanager.com/viewtopic.php?f=15&t=12370
+Lua debug trace, fork of StackTracePlus@Ignacio, 
+will work only in FAR manager environment<br /><br />
+FAR manager:<br />
+https://farmanager.com/<br />
+FAR manager forum discussion:<br />
+https://forum.farmanager.com/viewtopic.php?f=15&t=12370<br />
+
