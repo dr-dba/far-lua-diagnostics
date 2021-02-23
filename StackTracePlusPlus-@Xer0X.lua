@@ -23,7 +23,6 @@ if true then return end --]]
 See the _macroinit.lua file in the same repository
 --]]
 
-if not Xer0X then Xer0X = { } end
 require("Lib-Common-@Xer0X")
 require("introspection-@Xer0X")
 
@@ -531,6 +530,39 @@ function _M.stacktrace(...)
 end
 local is_mdl, tbl_args, own_file_path, own_file_fold, own_file_name, own_file_extn
 	= fnc_file_whoami(...)
+Xer0X.STP = _M
+Xer0X.stp = _M
+local	ok, err_msg, LE = Xer0X.fnc_safe_require("LuaExplorer-@Xer0X")
+if not	ok 
+then	ok, err_msg, LE = Xer0X.fnc_safe_require("LE") 
+end
+if	LE
+then	_G.LE = LE
+	_G.le = LE
+end
+if	true
+then    if not	debug.traceback__orig
+	and	debug.getinfo(debug.traceback, "S").what == "C"
+	then	debug.traceback__orig = debug.traceback
+	end
+	local sz_err_dir = win.GetEnv("temp")
+	debug.traceback = function(...)
+		local err_rep_1, err_rep_2, err_rep_3, err_rep_4, err_rep_5 = debug.traceback__orig(...)
+		Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_orig.txt", err_rep_1)
+		local tbl_args = { ... }
+		tbl_args[#tbl_args + 1] = 1
+		tbl_args[#tbl_args + 1] = "no_header"
+		tbl_args[#tbl_args + 1] = true
+		
+		local tbl_stack, tbl_path = _M.fnc_stack_trace(unpack(tbl_args))
+		Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_plus.txt", tbl_stack.message_new)
+		far.Timer(1, function(sender)
+			sender.Enabled = false; sender:Close();
+			LE(tbl_stack, "EXEC ", nil, nil, tbl_path)
+		end)
+		return err_rep_1.."\n"..tbl_stack.message_new
+	end
+end
 
 return _M
 
