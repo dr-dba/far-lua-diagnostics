@@ -1,3 +1,8 @@
+--[[ Put here for histrical record's reason only, 
+all the conent and functionality moved to:
+https://github.com/dr-dba/far-lua-general-utils
+Lib-Common-@Xer0X.lua
+]]
 require("Lib-Common-@Xer0X")
 local ok, err_msg, le = Xer0X.fnc_safe_require("LuaExplorer-@Xer0X")
 if ok then _G.LE = le; _G.le = le; end
@@ -10,7 +15,6 @@ local ok, err_msg, stp = Xer0X.fnc_safe_require("StackTracePlusPlus-@Xer0X")
 Xer0X.STP = stp
 local sz_err_dir = win.GetEnv("temp")
 debug.traceback = function(...)
-	require("zbs.init-far").fnc_attach()
 	local err_rep_1, err_rep_2, err_rep_3, err_rep_4, err_rep_5 = debug.traceback__orig(...)
 	Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_orig.txt", err_rep_1)
 	local tbl_args = { ... }
