@@ -25,9 +25,15 @@ See the _macroinit.lua file in the same repository
 
 require("Lib-Common-@Xer0X")
 require("introspection-@Xer0X")
+-- helpers:
+local fnc_source_info_get	= Xer0X.fnc_source_info_get
+local fnc_norm_script_path	= Xer0X.fnc_norm_script_path
 
 -- tables
-local _G = _G, sz_mdl_own_file
+local _G = _G
+local is_mdl, tbl_args, own_file_path, own_file_fold, own_file_name, own_file_extn
+	= Xer0X.fnc_file_whoami(...)
+
 local string, io, debug, coroutine = string, io, debug, coroutine
 
 -- functions
@@ -81,10 +87,6 @@ add_known_module("utf8",	"utf8 module")
 add_known_module("win",		"win module")
 
 local NORMALIZE_PATH = false
-
-local fnc_source_info_get	= Xer0X.fnc_source_info_get
-local fnc_file_whoami		= Xer0X.fnc_file_whoami
-local fnc_norm_script_path	= Xer0X.fnc_norm_script_path
 
 
 if not Xer0X then Xer0X = {} end
@@ -161,8 +163,8 @@ It parses either the file or the string where the function is defined.
 Returns '?' if the line where the function is defined is not found. ]]
 local function fnc_guess_more_func_info(info)
 	local file, err, line_now, line_def
-	if	type(info.source) == "string" and
-		info.source:sub(1, 1) == "@"
+	if	type(info.source) == "string"
+	and	info.source:sub(1, 1) == "@"
 	then
 		file, err = io.open(info.source:sub(2), "r")
 		if	file
@@ -171,9 +173,9 @@ local function fnc_guess_more_func_info(info)
 				do	line_def = file:read("*l")
 				end
 			end
-			if	info.currentline and
-				info.currentline >=
-				info.linedefined
+			if	info.currentline
+			and	info.currentline
+			>=	info.linedefined
 			then	for	ii = info.linedefined + 1, info.currentline
 				do	line_now = file:read("*l")
 				end
@@ -321,7 +323,7 @@ function stacktrace_X(src_thr, orig_err_msg_file, orig_err_msg_line, orig_err_ms
 	local tbl_lev_info = { }
 	local tbl_lev_path = { }
 	local level = -1 -- is_same and 0 or -1
-	local is_outer = not orig_err_msg_file and true or false
+	local lev_call, is_outer
 	while true
 	do	level = level + 1
 		local src, src_inf, mod, lcl, upv, inf = fnc_source_info_get(src_thr, level, nil, 2, 2)
@@ -340,12 +342,25 @@ function stacktrace_X(src_thr, orig_err_msg_file, orig_err_msg_line, orig_err_ms
 			tbl_lev_info[#tbl_lev_info].ERROR_LINE = orig_err_msg_line
 			tbl_lev_info[#tbl_lev_info].INF.ERROR  = orig_err_msg_text
 		end
+		if string.find(inf.source, own_file_path, 2, true)
+		then	lev_call = level
+		end
 		if not	is_outer
 		then	tbl_lev_path[#tbl_lev_path + 1] = level..">"
 		end
 		if	#tbl_lev_info > 1
 		then	tbl_lev_info[#tbl_lev_info - 1][(level - 1)..">"] = tbl_lev_info[#tbl_lev_info]
 		end
+	end
+	if not	is_outer
+	and	#tbl_lev_info > lev_call
+	then
+		tbl_lev_path = { unpack(tbl_lev_path, 1, lev_call + 1) }
+		tbl_lev_info[lev_call + 2].TRACE_MSG = orig_err_msg
+		tbl_lev_path[lev_call + 1]=(lev_call).."|CUR>"
+		tbl_lev_info[lev_call + 1][(lev_call)..">"],
+		tbl_lev_info[lev_call + 1][(lev_call).."|CUR>"]	= nil,
+		tbl_lev_info[lev_call + 1][(lev_call)..">"]
 	end
 	return	tbl_lev_info[1], tbl_lev_path
 end
@@ -371,9 +386,9 @@ function _M.fnc_stack_trace(thread, message, level, header_kind, outer_only, p6,
 		thr_curr,thread, message, level,	header_kind,	outer_only, p6
 	end
 	if type(level) == "string"
-	then    local header_type_str = level
+	then    local	header_type_str = level
 		level = nil
-		if header_type_str == "no_header"
+		if	header_type_str == "no_header"
 		then	header_kind = 2
 		else	header_kind = nil
 		end
@@ -528,13 +543,36 @@ function _M.stacktrace(...)
 	local tbl_info = _M.fnc_stack_trace(...)
 	return tbl_info.message
 end
-local is_mdl, tbl_args, own_file_path, own_file_fold, own_file_name, own_file_extn
-	= fnc_file_whoami(...)
+
+local sz_err_dir = win.GetEnv("temp")
+function _M.traceback(...)
+	local err_rep_1, err_rep_2, err_rep_3, err_rep_4, err_rep_5 = debug.traceback__orig(...)
+	Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_orig.txt", err_rep_1)
+	local	tbl_args = { ... }
+	if	#tbl_args == 0
+	then	tbl_args[1] = "<NO-MSG>"
+	end
+	-- call level to start from:
+	tbl_args[#tbl_args + 1] = 1
+	-- "big red message of far error" header usage:
+	tbl_args[#tbl_args + 1] = "no_header"
+	-- show only outer to stack trace functions:
+	tbl_args[#tbl_args + 1] = true
+	
+	local tbl_stack, tbl_path = _M.fnc_stack_trace(unpack(tbl_args))
+	Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_plus.txt", tbl_stack.message_new)
+	far.Timer(1, function(sender)
+		sender.Enabled = false; sender:Close();
+		LE(tbl_stack, "EXEC ", nil, nil, tbl_path)
+	end)
+	return err_rep_1.."\n"..tbl_stack.message_new
+end
+
 Xer0X.STP = _M
 Xer0X.stp = _M
 local	ok, err_msg, LE = Xer0X.fnc_safe_require("LuaExplorer-@Xer0X")
-if not	ok 
-then	ok, err_msg, LE = Xer0X.fnc_safe_require("LE") 
+if not	ok
+then	ok, err_msg, LE = Xer0X.fnc_safe_require("LE")
 end
 if	LE
 then	_G.LE = LE
@@ -545,23 +583,7 @@ then    if not	debug.traceback__orig
 	and	debug.getinfo(debug.traceback, "S").what == "C"
 	then	debug.traceback__orig = debug.traceback
 	end
-	local sz_err_dir = win.GetEnv("temp")
-	debug.traceback = function(...)
-		local err_rep_1, err_rep_2, err_rep_3, err_rep_4, err_rep_5 = debug.traceback__orig(...)
-		Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_orig.txt", err_rep_1)
-		local tbl_args = { ... }
-		tbl_args[#tbl_args + 1] = 1
-		tbl_args[#tbl_args + 1] = "no_header"
-		tbl_args[#tbl_args + 1] = true
-		
-		local tbl_stack, tbl_path = _M.fnc_stack_trace(unpack(tbl_args))
-		Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_plus.txt", tbl_stack.message_new)
-		far.Timer(1, function(sender)
-			sender.Enabled = false; sender:Close();
-			LE(tbl_stack, "EXEC ", nil, nil, tbl_path)
-		end)
-		return err_rep_1.."\n"..tbl_stack.message_new
-	end
+	debug.traceback = _M.traceback
 end
 
 return _M
