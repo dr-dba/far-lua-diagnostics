@@ -86,7 +86,8 @@ add_known_module("bit64",	"bit64 module")
 add_known_module("utf8",	"utf8 module")
 add_known_module("win",		"win module")
 
-local NORMALIZE_PATH = false
+-- good for security, hides unnecessary to see username:
+local NORMALIZE_PATH = true
 
 
 if not Xer0X then Xer0X = {} end
@@ -362,7 +363,7 @@ function stacktrace_X(src_thr, orig_err_msg_file, orig_err_msg_line, orig_err_ms
 		tbl_lev_info[lev_call + 1][(lev_call).."|CUR>"]	= nil,
 		tbl_lev_info[lev_call + 1][(lev_call)..">"]
 	end
-	return	tbl_lev_info[1], tbl_lev_path
+	return	tbl_lev_info[1], tbl_lev_path, tbl_lev_info
 end
 
 --[[ Public:
@@ -435,7 +436,7 @@ Stack traceback
 	end
 	local orig_err_msg_file, orig_err_msg_line, orig_err_msg_text = string.match(message or "", "^(.+):(%d+): (.+)$")
 	if dumper.dump_same_thread then level = level + 1 end
-	local	tbl_level_locals = {}
+	local	tbl_level_locals = { }
 	local	level_to_show = 0
 	while	true
 	do
@@ -449,10 +450,12 @@ Stack traceback
 			src_file_type == "@" or
 			src_file_type == "#"
 				)
-		src_file_path_orig = src_is_file and src_test:sub(2)
-		src_file_path = NORMALIZE_PATH and fnc_norm_script_path(src_file_path_orig)
-			or src_file_path_orig
-
+		if src_is_file
+		then	src_file_path_orig = src_test:sub(2)
+			src_file_path = NORMALIZE_PATH and fnc_norm_script_path(src_file_path_orig)
+				or src_file_path_orig
+		else	src_file_path = src_file_path_orig
+		end
 	
 		
 		level_to_show		= level_to_show + 1
@@ -518,7 +521,14 @@ Stack traceback
 		end
 		level = level + 1
 	end
-	local tbl_dbg_stack, tbl_dbg_path = stacktrace_X(thread, orig_err_msg_file, orig_err_msg_line and tonumber(orig_err_msg_line), orig_err_msg_text, message)
+	local tbl_dbg_stack, tbl_dbg_path, tbl_dbg_info
+		= stacktrace_X(
+			thread,
+			orig_err_msg_file,
+			orig_err_msg_line and tonumber(orig_err_msg_line) or nil,
+			orig_err_msg_text,
+			message
+				)
 	table.insert(tbl_dbg_path, 1, "tbl_dbg_stack")
 	local message_new = dumper:concat_lines()
 	message_new = string.gsub(message_new, "%.Lua"	, ".lua")
@@ -530,13 +540,15 @@ Stack traceback
 		thread = thread,
 		message = message,
 		level = level,
-		thread_is_same = is_same_thr,
-		message_new = message_new,
-		tbl_dbg_stack = tbl_dbg_stack,
-		tbl_lev_locals = tbl_level_locals,
+		thread_is_same	= is_same_thr,
+		message_new	= message_new,
+		tbl_dbg_stack	= tbl_dbg_stack,
+		tbl_dbg_path	= tbl_dbg_path,
+		tbl_dbg_info	= tbl_dbg_info,
+		tbl_lev_locals	= tbl_level_locals,
 		user_known_tables = m_user_known_tables,
 		syst_known_tables = m_syst_known_tables
-	}, tbl_dbg_path
+	}, tbl_dbg_path, tbl_dbg_info
 end --	_M.fnc_stack_trace()
 
 function _M.stacktrace(...)
@@ -546,8 +558,8 @@ end
 
 local sz_err_dir = win.GetEnv("temp")
 function _M.traceback(...)
-	local err_rep_1, err_rep_2, err_rep_3, err_rep_4, err_rep_5 = debug.traceback__orig(...)
-	Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_orig.txt", err_rep_1)
+	local err_rep = debug.traceback__orig(...)
+	Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_orig.txt", err_rep)
 	local	tbl_args = { ... }
 	if	#tbl_args == 0
 	then	tbl_args[1] = "<NO-MSG>"
@@ -559,13 +571,17 @@ function _M.traceback(...)
 	-- show only outer to stack trace functions:
 	tbl_args[#tbl_args + 1] = true
 	
-	local tbl_stack, tbl_path = _M.fnc_stack_trace(unpack(tbl_args))
+	local tbl_stack, tbl_path, tbl_info = _M.fnc_stack_trace(unpack(tbl_args))
 	Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_plus.txt", tbl_stack.message_new)
-	far.Timer(1, function(sender)
-		sender.Enabled = false; sender:Close();
-		LE(tbl_stack, "EXEC ", nil, nil, tbl_path)
-	end)
-	return err_rep_1.."\n"..tbl_stack.message_new
+	if	#tbl_stack.tbl_dbg_info
+	==	#tbl_stack.tbl_dbg_path
+	then	-- supposed to be user call, show immediatly:
+		LE(tbl_stack, "EXEC/D", nil, nil, tbl_stack.tbl_dbg_path)
+	else	-- supposed to be error callback, need to run in another thread:
+		far.Timer(1, function(sender) sender.Enabled = false; sender:Close();
+		LE(tbl_stack, "EXEC/E", nil, nil, tbl_stack.tbl_dbg_path) end)
+	end
+	return err_rep.."\n"..tbl_stack.message_new
 end
 
 Xer0X.STP = _M
