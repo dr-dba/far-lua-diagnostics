@@ -22,6 +22,8 @@ Macro { description = "my cool macro test";
 	priority = 100;
 	action = function()
 		local abc = 12345
-		Xer0X.STP.traceback("Hello World!")
+		Xer0X.STP.traceback("Hello World! (#1)")
+		local xyz = 54321
+		Xer0X.STP.traceback("Bye, the cruel world.. (#2)")
 	end;
 }
