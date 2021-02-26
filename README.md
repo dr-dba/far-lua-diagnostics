@@ -3,6 +3,7 @@ Lua debug trace, fork of <a href="https://github.com/ignacio/StackTracePlus">Sta
 will work only in FAR manager environment<br /><br />
 Dependencies:<br />
 https://github.com/dr-dba/far-lua-general-utils<br />
+https://github.com/dr-dba/far-lua-explorer<br />
 <br />
 FAR manager:<br />
 https://farmanager.com/<br />
