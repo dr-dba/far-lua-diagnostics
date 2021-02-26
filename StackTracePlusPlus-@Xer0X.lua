@@ -15,8 +15,10 @@ if true then return end --]]
 
 	DEPENDENCIES:
 
-	Lua Explorer Advanced
-	http://forum.farmanager.com/viewtopic.php?f=60&t=7988
+	* Lua Explorer "Advanced" +@Xer0X mod
+	https://github.com/dr-dba/far-lua-diagnostics	
+	* General utils for common use
+	https://github.com/dr-dba/far-lua-general-utils
 ]]
 
 --[[ Установка:
