@@ -547,7 +547,7 @@ Stack traceback
 		tbl_dbg_info	= tbl_dbg_info,
 		tbl_lev_locals	= tbl_level_locals,
 		user_known_tables = m_user_known_tables,
-		syst_known_tables = m_syst_known_tables
+		syst_known_tables = m_syst_known_tables,
 	}, tbl_dbg_path, tbl_dbg_info
 end --	_M.fnc_stack_trace()
 
@@ -573,8 +573,10 @@ function _M.traceback(...)
 	
 	local tbl_stack, tbl_path, tbl_info = _M.fnc_stack_trace(unpack(tbl_args))
 	Xer0X.fnc_file_text_save(sz_err_dir.."\\far_err_rpt_plus.txt", tbl_stack.message_new)
+	tbl_stack.tbl_args = { ... }
 	if	#tbl_stack.tbl_dbg_info
 	==	#tbl_stack.tbl_dbg_path
+	and	tbl_stack.thread_is_same ~= 0
 	then	-- supposed to be user call, show immediatly:
 		LE(tbl_stack, "EXEC/D", nil, nil, tbl_stack.tbl_dbg_path)
 	else	-- supposed to be error callback, need to run in another thread:
