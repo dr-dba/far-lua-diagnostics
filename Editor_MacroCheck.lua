@@ -1,6 +1,7 @@
 --[[
+Проверка корректности скрипта в редакторе + выполнение
+https://forum.farmanager.com/viewtopic.php?f=60&t=8008
 https://gist.github.com/johnd0e/e5ed84eb5d94f7001b57c9b5bcd22991
-http://forum.farmanager.com/viewtopic.php?f=60&t=8008
 TODO: stack trace util
 ]]
 
@@ -11,12 +12,12 @@ local nfo = Info {
 	id = "DA9B41E0-3896-4533-94E9-D5CE10BB7968",
 	name = "MacroCheck (+@Xer0X mod)",
 	version = "1.2",
-	version_mod = "1.0",
+	version_mod = "1.1",
 	author = "jd",
 	author_mod = "Xer0X",
 	url = "http://forum.farmanager.com/viewtopic.php?f=60&t=8008",
 	url_mod = "http://forum.farmanager.com/viewtopic.php?f=60&t=8008",
-	minfarversion = {3, 0, 0, 4261, 0}, -- far.FarClock
+	minfarversion = { 3, 0, 0, 4261, 0 }, -- far.FarClock
 	files = "scriptscfg.*.sample",
 	options = {
 		check	= "[ check  macro  ]",
@@ -166,7 +167,7 @@ local function ErrMessage(msg, line, ei)
 		if ei.UseSelection then line = line + ei.BlockStartLine - 1 end
 		editor.Select(ei.EditorID, F.BTYPE_STREAM, line, 1, -1, 1)
 		setEditorPos({ CurLine = line })
-		if -1 == far.Message(msg, nfo.name, nil, "lw")
+		if -1 == far.Message(string.format("%s\nat line %s", msg, line), nfo.name, nil, "lw")
 		then	editor.Select(ei.EditorID, ei.UseSelection and F.BTYPE_STREAM or F.BTYPE_NONE)
 			setEditorPos(ei)
 		end
@@ -175,13 +176,14 @@ end
 
 local function ErrorCurrent(Err, ei)
 	local line, err, err1, err2
+	local err_msg_orig = Err
 	if	ei.isMoon
 	then	err1, line, err2 = Err:match("^(.-) %[(%d+)%] >>%s*(.+)$")
 	else	line, err = Err:match(":(%d+): (.+)$")
 	end
-	if not	line
-	then	return ErrMessage(Err)
-	else	return ErrMessage(err or err1..err2, line, ei)
+	if	line
+	then	return ErrMessage(err or err1..err2, tonumber(line), ei)
+	else	return ErrMessage(Err)
 	end
 end
 
