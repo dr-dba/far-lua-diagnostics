@@ -4,6 +4,7 @@ will work only in FAR manager environment<br /><br />
 Dependencies:<br />
 https://github.com/dr-dba/far-lua-general-utils<br />
 https://github.com/dr-dba/far-lua-explorer<br />
+https://github.com/dr-dba/far-lua-internals<br />
 <br />
 FAR manager:<br />
 https://farmanager.com/<br />
