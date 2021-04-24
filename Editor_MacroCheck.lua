@@ -6,6 +6,7 @@ https://forum.farmanager.com/viewtopic.php?f=60&t=8008
 https://gist.github.com/johnd0e/e5ed84eb5d94f7001b57c9b5bcd22991
 
 Modified (a bit more advanced) version of @Xer0X+@citRix:
+https://forum.farmanager.com/viewtopic.php?f=15&t=12432
 https://github.com/dr-dba/far-lua-diagnostics/
 Editor_MacroCheck.lua
 
@@ -27,16 +28,17 @@ local nfo = Info {
 	description = "Check macro in editor [Reload/Execute/Variables] (+@Xer0X mod)",
 	id = "DA9B41E0-3896-4533-94E9-D5CE10BB7968",
 	name = "MacroCheck (+@Xer0X mod)",
-	version = "1.2",
-	version_mod = "1.1.1",
-	author = "JD",
-	author_mod = "Xer0X",
-	url = "http://forum.farmanager.com/viewtopic.php?f=60&t=8008",
-	url_mod = "http://forum.farmanager.com/viewtopic.php?f=60&t=8008",
+	version =	"1.2",
+	version_mod =	"1.1.2",
+	author =	"JD",
+	author_mod =	"Xer0X",
+	url	= "http://forum.farmanager.com/viewtopic.php?f=60&t=8008",
+	url_mod = "https://forum.farmanager.com/viewtopic.php?f=15&t=12432",
 	minfarversion = { 3, 0, 0, 4261, 0 }, -- far.FarClock
 	files = "scriptscfg.*.sample",
 	options = {
 		Load_one ="[ Load   macro ]",
+		UnLoadOne="[ UnLoad macro ]",
 		Check_one="[ Check  macro ]",
 		Eval_one ="[ Eval   macro ]",
 		Load_all ="[ Reload all   ]",
@@ -325,11 +327,11 @@ local function checkMacro(mode)
 		if ei.FileName:lower():sub(1, sp_len) ~= scriptspath
 		then mf.postmacro(Keys, "Tab")
 		end
-		local	btns = "Load &One;Reload &All;&Execute;&Variables"..(ei.isMoon and ";&MoonToLua" or "")
+		local	btns = "&UnLoad One;Load &One;Reload &All;&Execute;&Variables"..(ei.isMoon and ";&MoonToLua" or "")
 		local	ans = far.Message("Syntax is Ok", nfo.name, btns)
 		if	ans == -1
 		then	return
-		else	mode = ({ "Load_one", "Load_all", "Execute", "Variables", "MoonToLua" })[ans]
+		else	mode = ({ "UnLoadOne", "Load_one", "Load_all", "Execute", "Variables", "MoonToLua" })[ans]
 		end
 	end
 	local exec_modes = {
@@ -342,6 +344,10 @@ local function checkMacro(mode)
 	if	mode == "Load_one"
 	then
 		Xer0X.fnc_macro_one_load(nil, Editor.FileName)
+	elseif
+		mode == "UnLoadOne"
+	then
+		Xer0X.fnc_mcr_src_all_clean(Editor.FileName)
 	elseif
 		mode == "MoonToLua" and ei.isMoon
 	then	-- todo selection
@@ -425,16 +431,22 @@ MenuItem {
 	action = function() checkMacro("Check_one") end
 } end
 
-if O.Eval_one then
+if O.UnLoadOne then
 MenuItem {
-	description = "Eval Lua/Moon script",
-	guid = "01ABE288-8C0D-4824-94C4-3F30065D9085",
-	menu = "Plugins",
+	description = "Reload macros",
+	guid = "12B23F7B-05CE-4824-9CEC-4AE6BA09AB7A",
 	area = "Editor",
+	menu = "Plugins",
 	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) 
-		and O.Eval_one
+		and O.UnLoadOne
 	end,
-	action = function() checkMacro("Eval_one") end
+	action = function(OpenFrom)
+		if	OpenFrom == F.OPEN_EDITOR
+		and	ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName())
+		then	checkMacro("UnLoadOne")
+		else	ReloadMacro()
+		end
+	end
 } end
 
 if O.Load_one then
@@ -450,9 +462,20 @@ MenuItem {
 		if	OpenFrom == F.OPEN_EDITOR
 		and	ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName())
 		then	checkMacro("Load_one")
-		else	ReloadMacro()
 		end
 	end
+} end
+
+if O.Eval_one then
+MenuItem {
+	description = "Eval Lua/Moon script",
+	guid = "01ABE288-8C0D-4824-94C4-3F30065D9085",
+	menu = "Plugins",
+	area = "Editor",
+	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) 
+		and O.Eval_one
+	end,
+	action = function() checkMacro("Eval_one") end
 } end
 
 MenuItem {
@@ -480,3 +503,5 @@ NoMacro {
 	condition = function() return last_co end,
 	action = function() far.Show(coroutine.resume(last_co)) end
 }
+
+-- @@@@@
