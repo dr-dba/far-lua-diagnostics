@@ -23,6 +23,7 @@ if true then return end --]]
 
 --[[ Установка:
 See the _macroinit.lua file in the same repository
+--]]
 
 require("Lib-Common-@Xer0X")
 require("introspection-@Xer0X")
@@ -102,9 +103,9 @@ add_known_module("win",		"win module")
 local NORMALIZE_PATH = true
 
 
-local m_user_known_tables = { }
-local m_syst_known_functions = { }
-local m_user_known_functions = { }
+local m_user_known_tables =	{ }
+local m_syst_known_functions =	{ }
+local m_user_known_functions =	{ }
 
 -- Adds a table to the list of known tables
 function _M.add_known_table(tab, description)
@@ -143,27 +144,9 @@ end
 --[[ Private:
 Parses a line, looking for possible function definitions (in a very naïve way)
 Returns '(anonymous)' if no function name was found in the line
+--]]
 local function ParseLine(line)
-	assert(type(line) == "string")
---	print(line)
-	local match
-	match = line:match("^%s*function%s+(%w+)")
-	if match then -- print("+++++++++++++function", match)
-		return match
-	end
-	match = line:match("^%s*local%s+function%s+(%w+)")
-	if match then -- print("++++++++++++local", match)
-		return match
-	end
-	match = line:match("^%s*local%s+(%w+)%s+=%s+function")
-	if match then -- print("++++++++++++local func", match)
-		return match
-	end
-	match = line:match("%s*function%s*%(")	
-	if match then -- print("+++++++++++++function2", match)
-		return "(anonymous)"
-	end
-	return "(anonymous)"
+	return Xer0X.fnc_definition_parse(line)
 end
 
 --[[ Private:
@@ -183,8 +166,9 @@ local function fnc_guess_more_func_info(info)
 				end
 			end
 			if	info.currentline
-			and	info.currentline
+			and(	info.currentline
 			>=	info.linedefined
+			or	info.currentline == -1)
 			then	for	ii = info.linedefined + 1, info.currentline
 				do	line_now = file:read("*l")
 				end
@@ -192,7 +176,9 @@ local function fnc_guess_more_func_info(info)
 			file:close()
 		else	print("file not found:"..tostring(err))
 		end
-	else
+	elseif	info.linedefined ~= -1
+	and	info.currentline ~= -1
+	then
 		local	line_num = 0
 		for	ii_line in string.gmatch(info.source, "([^\n]+)\n-")
 		do	line_num = line_num + 1
@@ -203,12 +189,13 @@ local function fnc_guess_more_func_info(info)
 			end
 		end
 	end
-	if	not file
+	if not	file
 	then	print("file not found:"..tostring(err))
-	elseif	not line_def
+	elseif
+	not	line_def
 	then	print("line not found")
 	end
-	return line_def and ParseLine(line_def) or "?", line_now
+	return line_def and ParseLine(line_def) or info.name or "?", line_now
 end
 
 -- Dumper instances are used to analyze stacks and collect its information.
@@ -218,7 +205,7 @@ Dumper.new = function(thread)
 	local t = { lines = { } }
 	for k, v in pairs(Dumper) do t[k] = v end
 	t.dump_same_thread = thread == coroutine.running()
---[[	if a thread was supplied, bind it to debug.info and debug.get
+	--[[ if a thread was supplied, bind it to debug.info and debug.get
 	we also need to skip this additional level we are introducing in the callstack
 	(only if we are running	in the same thread we're inspecting) ]]
 	if type(thread) == "thread"
@@ -371,18 +358,19 @@ function stacktrace_X(src_thr, orig_err_msg_file, orig_err_msg_line, orig_err_ms
 	local level = -1 -- is_same and 0 or -1
 	local own_lev_max = 0
 	local is_err_msg, err_lev
+	local tbl_params = {
+		mode_upvals = 2,
+		mode_params = 2,
+		mode_vararg = 2,
+		mode_locals = 2,
+		orig_err_msg_file = orig_err_msg_file,
+		orig_err_msg_line = orig_err_msg_line,
+		orig_err_msg_text = orig_err_msg_text,
+	}
 	while true
 	do	level = level + 1
 		local src, src_inf, mod, upv, arg, var, lcl, inf
-			= fnc_exec_time_info_read(
-				src_thr, level,
-				{
-					mode_upvals = 2,
-					mode_params = 2,
-					mode_vararg = 2,
-					mode_locals = 2,
-				}
-			)
+			= fnc_exec_time_info_read(src_thr, level, tbl_params)
 		if not inf then break end
 		inf._LEX_DISPLAY_NAME = "INF" inf._LEX_DISPNAME_SEP = ">"
 		upv._LEX_DISPLAY_NAME = "UPV" upv._LEX_DISPNAME_SEP = ">"
@@ -452,6 +440,7 @@ This function is suitable to be used as an error handler with pcall or xpcall
 @param level	an optional number telling at which level to start the traceback (default is 1)
 
 Returns a string with the stack trace and a string with the original error.
+--]]
 function _M.fnc_stack_trace(thread, message, level, header_kind, outer_only, p6, p7, p8, p9, p10, p11, p12)
 	local is_same_thr = -1
 	local thr_curr = coroutine.running()
@@ -518,11 +507,21 @@ Stack traceback
 	local	level_to_show = 0
 	while	true
 	do
-		local info, source, src_test, src_is_file, what_prev, level_to_show_str,
+		local	source, src_test, src_is_file, what_prev, level_to_show_str,
 			src_file_path_orig, src_file_path, src_file_type, src_func_name,
 			src_func_name_guess, src_curr_line_guess
-		info = dumper.getinfo(level, "nSlfu")
-		if not info then break end
+		local	info = dumper.getinfo(level, "nSlfu")
+		if not	info then break end
+		if	level == 0
+		and	type(thread) == "thread"
+		and not	dumper.dump_same_thread
+		and	tonumber(orig_err_msg_line) >= 0
+		and	info.linedefined	>= 0
+		and	info.lastlinedefined	>= 0
+		and	info.currentline	==-1
+		and	info.what ~= "C"
+		then	info.currentline = tonumber(orig_err_msg_line)
+		end
 		source = info.short_src
 		src_test = info.source
 		src_file_type = src_test and src_test:sub(1, 1)
@@ -530,7 +529,7 @@ Stack traceback
 			src_file_type == "@" or
 			src_file_type == "#"
 				)
-		if src_is_file
+		if	src_is_file
 		then	src_file_path_orig = src_test:sub(2)
 			src_file_path = NORMALIZE_PATH and fnc_norm_script_path(src_file_path_orig)
 				or src_file_path_orig
@@ -708,9 +707,9 @@ end
 
 Xer0X.STP = _M
 Xer0X.stp = _M
-if
-	true
-then    if not	debug.traceback__orig
+if	true
+then
+	if not	debug.traceback__orig
 	and	debug.getinfo(debug.traceback, "S").what == "C"
 	then	debug.traceback__orig = debug.traceback
 	end
@@ -719,7 +718,7 @@ then    if not	debug.traceback__orig
 		tbl_args[#tbl_args + 1] = {
 			help_arg= true,
 			is_sync	= false,
-			level_up= type(tbl_args[1]) == "thread" and 1 or 2
+			level_up= type(tbl_args[1]) == "thread" and 0 or 2
 		}
 		return _M.traceback(unpack(tbl_args))
 	end
