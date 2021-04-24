@@ -9,6 +9,15 @@ Modified (a bit more advanced) version of @Xer0X+@citRix:
 https://github.com/dr-dba/far-lua-diagnostics/
 Editor_MacroCheck.lua
 
+Dependencies:
+-------------
+https://github.com/dr-dba/far-lua-diagnostics/
+StackTracePlusPlus-@Xer0X.Lua 
+https://github.com/dr-dba/far-lua-internals/
+introspection-@Xer0X.Lua
+https://github.com/dr-dba/far-lua-general-utils/
+Lib-Common-@Xer0X.Lua
+
 TODO: stack trace util
 ]]
 
