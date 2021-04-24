@@ -40,6 +40,7 @@ local nfo = Info {
 		Check_one="[ Check  macro ]",
 		Eval_one ="[ Eval   macro ]",
 		Load_all ="[ Reload all   ]",
+		MoonToLua="[ Moon to Lua  ]",
 		work_area="Plugins Disks Config",
 		use_selected = {
 			Eval = true,
