@@ -187,10 +187,23 @@ local function ErrMessage(msg, line, ei)
 	else
 		if ei.UseSelection then line = line + ei.BlockStartLine - 1 end
 		editor.Select(ei.EditorID, F.BTYPE_STREAM, line, 1, -1, 1)
+		-- show the line with the error:
 		setEditorPos({ CurLine = line })
-		if -1 == far.Message(string.format("%s\nat line %s", msg, line), nfo.name, nil, "lw")
-		then	editor.Select(ei.EditorID, ei.UseSelection and F.BTYPE_STREAM or F.BTYPE_NONE)
+		local	msg_answer = far.Message(string.format("%s\nat line %s", msg, line), nfo.name, "&UnLoad one;&Go to error;&Cancel", "lw")
+		if	msg_answer ==-1
+		or	msg_answer == 3
+		then	--[[ do nothing, 
+			but actually restore the editor position needed ]]
+			editor.Select(ei.EditorID, ei.UseSelection and F.BTYPE_STREAM or F.BTYPE_NONE)
 			setEditorPos(ei)
+		elseif	msg_answer == 1
+		then	-- Unload the opened file:
+			Xer0X.fnc_mcr_src_all_clean(ei.FileName)
+			-- restore the editor position:
+			editor.Select(ei.EditorID, ei.UseSelection and F.BTYPE_STREAM or F.BTYPE_NONE)
+			setEditorPos(ei)
+		elseif	msg_answer == 2
+		then	-- goto error, but we are already there
 		end
 	end
 end
@@ -319,8 +332,16 @@ local function checkMacro(mode)
 	if	Err
 	then    ErrorCurrent(Err, ei)
 		last_co = nil
+		--[[
+		local	btns = "&UnLoad One;&Cancel"
+		local	ans = far.Message("Syntax is Ok", nfo.name, btns)
+		if	ans == -1
+		then	return
+		else	mode = ({ "UnLoadOne", "Load_one", "Load_all", "Execute", "Variables", "MoonToLua" })[ans]
+		end
+		--]]
 		return
-	end
+	end 
 	if not	mode
 	or	mode == "Check_one"
 	then
