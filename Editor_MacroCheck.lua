@@ -1,7 +1,14 @@
 --[[
 Проверка корректности скрипта в редакторе + выполнение
+
+Original version of @JD:
 https://forum.farmanager.com/viewtopic.php?f=60&t=8008
 https://gist.github.com/johnd0e/e5ed84eb5d94f7001b57c9b5bcd22991
+
+Modified (a bit more advanced) version of @Xer0X+@citRix:
+https://github.com/dr-dba/far-lua-diagnostics/
+Editor_MacroCheck.lua
+
 TODO: stack trace util
 ]]
 
@@ -12,19 +19,20 @@ local nfo = Info {
 	id = "DA9B41E0-3896-4533-94E9-D5CE10BB7968",
 	name = "MacroCheck (+@Xer0X mod)",
 	version = "1.2",
-	version_mod = "1.1",
-	author = "jd",
+	version_mod = "1.1.1",
+	author = "JD",
 	author_mod = "Xer0X",
 	url = "http://forum.farmanager.com/viewtopic.php?f=60&t=8008",
 	url_mod = "http://forum.farmanager.com/viewtopic.php?f=60&t=8008",
 	minfarversion = { 3, 0, 0, 4261, 0 }, -- far.FarClock
 	files = "scriptscfg.*.sample",
 	options = {
-		check	= "[ check  macro  ]",
-		eval	= "[ eval   macro  ]",
-		reload	= "[ reload macros ]",
-		reloadmenu = "Plugins Disks Config",
-		useselection = {
+		Load_one ="[ Load   macro ]",
+		Check_one="[ Check  macro ]",
+		Eval_one ="[ Eval   macro ]",
+		Load_all ="[ Reload all   ]",
+		work_area="Plugins Disks Config",
+		use_selected = {
 			Eval = true,
 			MoonToLua = true
 		}
@@ -48,11 +56,12 @@ http://forum.farmanager.com/viewtopic.php?f=60&t=7988]], "")
 end
 
 local F = far.Flags
+local meta = { __index = _G }
+
 local function ProcessName(mask, file)
 	return far.ProcessName(F.PN_CMPNAMELIST, mask, file, F.PN_SKIPPATH)
 end
 
-local meta = { __index = _G }
 local function sandbox(f, env, mt)
 	return setfenv(f, setmetatable(env or { }, mt or meta))
 end
@@ -201,6 +210,7 @@ end
 --]]
 
 local SELECTION = "selection"
+
 local function ErrorRuntime(thread, Err, ei)
 	local level, di = 0
 	repeat	di = debug.getinfo(thread, level)
@@ -235,8 +245,7 @@ local function inspectRet(success, ...)
 	elseif
 		n > 0
 	then
-		repeat
-			local ret, pos = far.Show(...)
+		repeat	local ret, pos = far.Show(...)
 			if ret then le(ret.arg, "value "..tostring(pos)) end
 		until not ret
 	end
@@ -264,14 +273,14 @@ local function checkMacro(mode)
 	if	sel
 	then	-- save for further restoring
 		ei.Selection = {
-			BlockType = ei.BlockType,
-			BlockStartLine = ei.BlockStartLine,
+			BlockType =	ei.BlockType,
+			BlockStartLine= ei.BlockStartLine,
 			BlockStartPos = sel.StartPos,
-			BlockWidth =	sel.EndPos -	sel.StartPos +	1,
-			BlockHeight =	sel.EndLine -	sel.StartLine + 1
+			BlockWidth =	sel.EndPos - sel.StartPos + 1,
+			BlockHeight =	sel.EndLine -sel.StartLine+ 1,
 		}
 		if not	mode
-		or	O.useselection[mode]
+		or	O.use_selected[mode]
 		then	ei.UseSelection = true
 		end
 	end
@@ -289,7 +298,7 @@ local function checkMacro(mode)
 	end
 	--]]
 	-- New "evaluate" @Xer0X:
-	if mode == "Eval"
+	if mode == "Eval_one"
 	and not ei.isMoon
 	then src = "return (function(...)\n"..src.."\nend)(...)"
 	end -- end of evaluating
@@ -301,52 +310,52 @@ local function checkMacro(mode)
 		return
 	end
 	if not	mode
+	or	mode == "Check_one"
 	then
-		if not (ei.FileName:lower():sub(1, sp_len) == scriptspath)
-		then	mf.postmacro(Keys, "Tab")
+		if ei.FileName:lower():sub(1, sp_len) ~= scriptspath
+		then mf.postmacro(Keys, "Tab")
 		end
-		local	btns = "Reload &One;Reload &All;&Execute;&Variables"
+		local	btns = "Load &One;Reload &All;&Execute;&Variables"..(ei.isMoon and ";&MoonToLua" or "")
 		local	ans = far.Message("Syntax is Ok", nfo.name, btns)
 		if	ans == -1
 		then	return
-		else	mode = ({ "ReloadOne", "Reload", "Execute", "Variables" })[ans]
+		else	mode = ({ "Load_one", "Load_all", "Execute", "Variables", "MoonToLua" })[ans]
 		end
 	end
 	local exec_modes = {
 		Execute = true,
-		Selection = true,
-		Variables = true,
-		Eval = true
-	--	EvalFile = true, --??
+		Selection=true,
+		Variables=true,
+		Eval_one =true,
+	--	EvalFile= true, --??
 	}
-	if	mode == "ReloadOne"
+	if	mode == "Load_one"
 	then
 		Xer0X.fnc_macro_one_load(nil, Editor.FileName)
 	elseif
 		mode == "MoonToLua" and ei.isMoon
 	then	-- todo selection
 		-- todo button
-		local lua = require("moonscript").to_lua(src)
-		if far.Message(lua, nfo.name, "Copy;", "l")
-		then far.CopyToClipboard(lua)
+		local	lua = require("moonscript").to_lua(src)
+		if	far.Message(lua, nfo.name, "Copy;", "l")
+		then	far.CopyToClipboard(lua)
 		end
 	elseif
-		mode == "Reload"
+		mode == "Load_all"
 	then
 		if 0 == band(ei.CurState, F.ECSTATE_SAVED)
 		then editor.SaveFile()
 		end
 		-- если при сохранении не возникло вопросов
 		if Area.Editor then ReloadMacro() end
-	elseif
-		not exec_modes[mode]
-	then
-		far.Message("wrong mode specified", nfo.name, nil, "w")
-	else	-- ?? optionally persist
-		local env
-		if	mode == "Eval"
+	elseif  
+		exec_modes[mode]
+	then    
+		-- ?? optionally persist
+		local	env
+		if	mode == "Eval_one"
 		and	ei.UseSelection
-		then -- 2ask for env
+		then	-- 2ask for env
 			local title = ("call: "..src):gsub("[\r\n].+", "...")
 			env = env_prompt(title, "env: ... (type as Lua code or leave empty)", "evalSelection")
 			if not env then return end
@@ -367,10 +376,12 @@ local function checkMacro(mode)
 				return
 			end
 		end
+	else
+		far.Message(string.format("wrong mode specified: %s", mode), nfo.name, nil, "w")
 	end
-end
+end -- checkMacro
 
-Macro { description = "Check macro in editor [Reload/Execute/Variables]",
+Macro { description = "Check macro in editor [LoadOne/Reload/Execute/Variables]",
 	id = "8FCF8185-A490-41D3-9F95-19E7669252D9",
 	area = "Editor", key = "CtrlEnter",
 	filemask = "*.lua;*.lua.cfg;*.lua.dat;*.moon;far_standards.lua.cfg",
@@ -382,48 +393,68 @@ Macro { description = "Eval selected text and inspect returned values",
 	area = "Editor", key = "CtrlShiftEnter",
 	flags = "EVSelection",
 	filemask = "*.lua;*.lua.cfg;*.lua.dat;*.moon",
-	action = function() checkMacro("Eval") end
+	action = function() checkMacro("Eval_one") end
 }
 
-Macro { description = "moon to lua", -- todo
+Macro { description = "Moon to Lua", -- todo
 	id = "3B5508B4-A0A5-4B74-9573-D2505DBF71D5",
 	area = "Editor", key = "F1",
 	filemask = "*.moon",
 	action = function() checkMacro("MoonToLua") end
 }
 
-if O.check then
+if O.Check_one then
 MenuItem {
 	description = "Check Lua/Moon script",
 	guid = "11958400-9BD7-4173-ABE0-7181682A282D",
 	menu = "Plugins",
 	area = "Editor",
-	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) and O.check end,
-	action = function() checkMacro() end
-}
-end
+	text = function() return O.Check_one and ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) 
+		and O.Check_one
+	end,
+	action = function() checkMacro("Check_one") end
+} end
 
-if O.eval then
+if O.Eval_one then
 MenuItem {
 	description = "Eval Lua/Moon script",
 	guid = "01ABE288-8C0D-4824-94C4-3F30065D9085",
 	menu = "Plugins",
 	area = "Editor",
-	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) and O.eval end,
-	action = function() checkMacro("Eval") end
-}
-end
+	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) 
+		and O.Eval_one
+	end,
+	action = function() checkMacro("Eval_one") end
+} end
+
+if O.Load_one then
+MenuItem {
+	description = "Reload macros",
+	guid = "2E0B9056-C8FC-45ED-BE8D-A622658D8113",
+	area = "Editor",
+	menu = "Plugins",
+	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) 
+		and O.Load_one
+	end,
+	action = function(OpenFrom)
+		if	OpenFrom == F.OPEN_EDITOR
+		and	ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName())
+		then	checkMacro("Load_one")
+		else	ReloadMacro()
+		end
+	end
+} end
 
 MenuItem {
 	description = "Reload macros",
 	guid = "6F3144E6-38A4-4C5D-B9A2-2B38C4DE83C8",
 	area = "Common",
-	menu = O.reloadmenu,
-	text = O.reload,
+	menu = O.work_area,
+	text = O.Load_all,
 	action = function(OpenFrom)
 		if	OpenFrom == F.OPEN_EDITOR
 		and	ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName())
-		then	checkMacro("Reload")
+		then	checkMacro("Load_all")
 		else	ReloadMacro()
 		end
 	end
