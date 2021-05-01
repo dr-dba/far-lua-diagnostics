@@ -8,7 +8,7 @@ https://gist.github.com/johnd0e/e5ed84eb5d94f7001b57c9b5bcd22991
 Modified (a bit more advanced) version of @Xer0X+@citRix:
 https://forum.farmanager.com/viewtopic.php?f=15&t=12432
 https://github.com/dr-dba/far-lua-diagnostics/
-Editor_MacroCheck.lua
+Editor_MacroCheck_@Xer0X.lua
 
 Dependencies:
 -------------
@@ -223,6 +223,18 @@ local function ErrorCurrent(Err, ei)
 	end
 end
 
+--[[
+if 	file 
+and	file:sub(1, 3) == "..."
+then
+	local trimpos = 4
+	local valid, len = file:utf8valid()
+	if not valid and len == 3 then trimpos = trimpos + 1 end
+	local ending = file:sub(trimpos)
+	if not valid then far.Show(ending, ending:utf8valid()) end
+	if ending == ei.FileName:sub(-ending:len()) then file = ei.FileName end
+end
+--]]
 
 local SELECTION = "selection"
 
@@ -333,6 +345,7 @@ local function checkMacro(mode)
 		Selection=true,
 		Variables=true,
 		Eval_one =true,
+	--	EvalFile= true, --??
 	}
 	if	mode == "Load_one"
 	then
