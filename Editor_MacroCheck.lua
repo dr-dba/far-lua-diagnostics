@@ -13,7 +13,7 @@ Editor_MacroCheck.lua
 Dependencies:
 -------------
 https://github.com/dr-dba/far-lua-diagnostics/
-StackTracePlusPlus-@Xer0X.Lua 
+StackTracePlusPlus-@Xer0X.Lua
 https://github.com/dr-dba/far-lua-internals/
 introspection-@Xer0X.Lua
 https://github.com/dr-dba/far-lua-general-utils/
@@ -25,17 +25,17 @@ TODO: stack trace util
 local Info = Info or package.loaded.regscript or function(...) return ... end -- luacheck: ignore 113/Info
 local nfo = Info {
 	_filename or ...,
-	description = "Check macro in editor [Reload/Execute/Variables] (+@Xer0X mod)",
-	id = "DA9B41E0-3896-4533-94E9-D5CE10BB7968",
-	name = "MacroCheck (+@Xer0X mod)",
-	version =	"1.2",
-	version_mod =	"1.1.2",
-	author =	"JD",
-	author_mod =	"Xer0X",
-	url	= "http://forum.farmanager.com/viewtopic.php?f=60&t=8008",
-	url_mod = "https://forum.farmanager.com/viewtopic.php?f=15&t=12432",
-	minfarversion = { 3, 0, 0, 4261, 0 }, -- far.FarClock
-	files = "scriptscfg.*.sample",
+	description	= "Check macro in editor [Reload/Execute/Variables] (+@Xer0X mod)",
+	id		= "DA9B41E0-3896-4533-94E9-D5CE10BB7968",
+	name		= "MacroCheck (+@Xer0X mod)",
+	version		= "1.2",
+	version_mod	= "1.1.2",
+	author		= "JD",
+	author_mod	= "Xer0X",
+	url		= "http://forum.farmanager.com/viewtopic.php?f=60&t=8008",
+	url_mod		= "https://forum.farmanager.com/viewtopic.php?f=15&t=12432",
+	minfarversion	= { 3, 0, 0, 4261, 0 }, -- far.FarClock
+	files		= "scriptscfg.*.sample",
 	options = {
 		Load_one ="[ Load   macro ]",
 		UnLoadOne="[ UnLoad macro ]",
@@ -45,8 +45,10 @@ local nfo = Info {
 		MoonToLua="[ Moon to Lua  ]",
 		work_area="Plugins Disks Config",
 		use_selected = {
-			Eval = true,
-			MoonToLua = true
+			Eval	= true,
+			MoonToLua=true,
+			Execute	= true,
+			Check_one=true,
 		}
 		-- todo pos to err (?moon)
 		-- todo macro keys
@@ -178,7 +180,7 @@ end
 local function setEditorPos(ei)
 	editor.SetPosition(ei.EditorID, ei);
 	editor.Redraw(ei.EditorID)
-end -- ??
+end 
 
 local function ErrMessage(msg, line, ei)
 	if not	ei
@@ -192,7 +194,7 @@ local function ErrMessage(msg, line, ei)
 		local	msg_answer = far.Message(string.format("%s\nat line %s", msg, line), nfo.name, "&UnLoad one;&Go to error;&Cancel", "lw")
 		if	msg_answer ==-1
 		or	msg_answer == 3
-		then	--[[ do nothing, 
+		then	--[[ do nothing,
 			but actually restore the editor position needed ]]
 			editor.Select(ei.EditorID, ei.UseSelection and F.BTYPE_STREAM or F.BTYPE_NONE)
 			setEditorPos(ei)
@@ -221,18 +223,6 @@ local function ErrorCurrent(Err, ei)
 	end
 end
 
---[[
-if 	file and
-	file:sub(1, 3) == "..."
-then
-	local trimpos = 4
-	local valid, len = file:utf8valid()
-	if not valid and len == 3 then trimpos = trimpos + 1 end
-	local ending = file:sub(trimpos)
-	if not valid then far.Show(ending, ending:utf8valid()) end
-	if ending == ei.FileName:sub(-ending:len()) then file = ei.FileName end
-end
---]]
 
 local SELECTION = "selection"
 
@@ -251,14 +241,6 @@ local function ErrorRuntime(thread, Err, ei)
 	end
 end
 
---[[
-local function fnc_test()
-	local b = 4
-	local ret1, ret2 = far.Show("Hello", "World")
-	return ret1, ret2
-end
-return fnc_test()
---]]
 
 -- todo: local stacktrace = export.CustomErrHandler or debug.traceback
 local function inspectRet(success, ...)
@@ -283,7 +265,6 @@ local function call(f, ei)
 	if not	success
 	then	-- todo: inspect stack
 		ErrorRuntime(thread, res, ei)
-	--	ErrorRuntime(thread, stacktrace(thread, res), ei)
 	end
 	return thread, res
 end
@@ -332,16 +313,8 @@ local function checkMacro(mode)
 	if	Err
 	then    ErrorCurrent(Err, ei)
 		last_co = nil
-		--[[
-		local	btns = "&UnLoad One;&Cancel"
-		local	ans = far.Message("Syntax is Ok", nfo.name, btns)
-		if	ans == -1
-		then	return
-		else	mode = ({ "UnLoadOne", "Load_one", "Load_all", "Execute", "Variables", "MoonToLua" })[ans]
-		end
-		--]]
 		return
-	end 
+	end
 	if not	mode
 	or	mode == "Check_one"
 	then
@@ -360,7 +333,6 @@ local function checkMacro(mode)
 		Selection=true,
 		Variables=true,
 		Eval_one =true,
-	--	EvalFile= true, --??
 	}
 	if	mode == "Load_one"
 	then
@@ -385,10 +357,9 @@ local function checkMacro(mode)
 		end
 		-- если при сохранении не возникло вопросов
 		if Area.Editor then ReloadMacro() end
-	elseif  
+	elseif
 		exec_modes[mode]
-	then    
-		-- ?? optionally persist
+	then	-- ?? optionally persist
 		local	env
 		if	mode == "Eval_one"
 		and	ei.UseSelection
@@ -420,14 +391,16 @@ end -- checkMacro
 
 Macro { description = "Check macro in editor [LoadOne/Reload/Execute/Variables]",
 	id = "8FCF8185-A490-41D3-9F95-19E7669252D9",
-	area = "Editor", key = "CtrlEnter",
+	area = "Editor",
+	key = "CtrlEnter",
 	filemask = "*.lua;*.lua.cfg;*.lua.dat;*.moon;far_standards.lua.cfg",
 	action = function() checkMacro() end
 }
 
 Macro { description = "Eval selected text and inspect returned values",
 	id = "3BCEADCB-FF93-4B7D-9EC3-97B76FAE0ABA",
-	area = "Editor", key = "CtrlShiftEnter",
+	area = "Editor",
+	key = "CtrlShiftEnter",
 	flags = "EVSelection",
 	filemask = "*.lua;*.lua.cfg;*.lua.dat;*.moon",
 	action = function() checkMacro("Eval_one") end
@@ -435,7 +408,8 @@ Macro { description = "Eval selected text and inspect returned values",
 
 Macro { description = "Moon to Lua", -- todo
 	id = "3B5508B4-A0A5-4B74-9573-D2505DBF71D5",
-	area = "Editor", key = "F1",
+	area = "Editor",
+	key = "F1",
 	filemask = "*.moon",
 	action = function() checkMacro("MoonToLua") end
 }
@@ -446,7 +420,7 @@ MenuItem {
 	guid = "11958400-9BD7-4173-ABE0-7181682A282D",
 	menu = "Plugins",
 	area = "Editor",
-	text = function() return O.Check_one and ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) 
+	text = function() return O.Check_one and ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName())
 		and O.Check_one
 	end,
 	action = function() checkMacro("Check_one") end
@@ -458,7 +432,7 @@ MenuItem {
 	guid = "12B23F7B-05CE-4824-9CEC-4AE6BA09AB7A",
 	area = "Editor",
 	menu = "Plugins",
-	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) 
+	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName())
 		and O.UnLoadOne
 	end,
 	action = function(OpenFrom)
@@ -476,7 +450,7 @@ MenuItem {
 	guid = "2E0B9056-C8FC-45ED-BE8D-A622658D8113",
 	area = "Editor",
 	menu = "Plugins",
-	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) 
+	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName())
 		and O.Load_one
 	end,
 	action = function(OpenFrom)
@@ -493,7 +467,7 @@ MenuItem {
 	guid = "01ABE288-8C0D-4824-94C4-3F30065D9085",
 	menu = "Plugins",
 	area = "Editor",
-	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName()) 
+	text = function() return ProcessName("*.lua;*.lua.cfg;*.lua.dat;*.lua.ini;*.moon", editor.GetFileName())
 		and O.Eval_one
 	end,
 	action = function() checkMacro("Eval_one") end
@@ -514,12 +488,13 @@ MenuItem {
 	end
 }
 
------------------------todo todo todo
+-- --------------------- todo todo todo
 
 NoMacro {
 	description = "",
 	id = "7E57D345-65DD-49F2-AD3D-21A506854B80",
-	area = "Editor", key = "F1",
+	area = "Editor", 
+	key = "F1",
 	priority = 50,
 	condition = function() return last_co end,
 	action = function() far.Show(coroutine.resume(last_co)) end
