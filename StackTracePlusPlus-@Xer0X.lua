@@ -25,13 +25,15 @@ if true then return end --]]
 See the _macroinit.lua file in the same repository
 --]]
 
-require("Lib-Common-@Xer0X")
-require("introspection-@Xer0X")
-local	req_ok, req_msg, fnc_lua_exp_proc, fnc_hidden_props
-				= Xer0X.fnc_safe_require("LuaExplorer-@Xer0X")
-if not	req_ok
-then	req_ok, req_msg, fnc_lua_exp_proc
-				= Xer0X.fnc_safe_require("LE")
+local Xer0X 
+	= require("Lib-Common-@Xer0X")
+local tbl_intro_tools 
+	= require("introspection-@Xer0X")
+local req_ok, req_msg, fnc_lua_exp_proc, fnc_hidden_props
+	= Xer0X.fnc_safe_require("LuaExplorer-@Xer0X")
+if not req_ok
+then req_ok, req_msg, fnc_lua_exp_proc
+	= Xer0X.fnc_safe_require("LE")
 end
 if	fnc_lua_exp_proc
 then	_G.LE = fnc_lua_exp_proc
@@ -406,7 +408,7 @@ function stacktrace_X(src_thr, orig_err_msg_file, orig_err_msg_line, orig_err_ms
 		then	own_lev_max = level
 		end
 		if	#tbl_lev_info > 0
-		then	tbl_lev_info[#tbl_lev_info]["CALLER:"..inf.name] = lev_inf
+		then	tbl_lev_info[#tbl_lev_info]["CALLER:"..inf.what.."/"..inf.name] = lev_inf
 		end
 		tbl_lev_info[#tbl_lev_info + 1] = lev_inf
 	end
@@ -707,9 +709,9 @@ end
 
 Xer0X.STP = _M
 Xer0X.stp = _M
-if	true
-then
-	if not	debug.traceback__orig
+if
+	true
+then    if not	debug.traceback__orig
 	and	debug.getinfo(debug.traceback, "S").what == "C"
 	then	debug.traceback__orig = debug.traceback
 	end
